@@ -30,8 +30,8 @@ def parse_ruuvitag_data(data):
     # Humidity: uint16 * 0.0025 %
     humidity = None if hum_raw == 65535 else hum_raw * 0.0025
 
-    # Pressure: uint16 (value = (hPa * 100) - 50000 Pa)
-    pressure = None if press_raw == 0 else (press_raw + 50000) / 100.0
+    # Pressure: uint16 in Pa (50000 Pa offset), convert to hPa then to mmHg
+    pressure = None if press_raw == 0 else ((press_raw + 50000) / 100.0) * 0.750062
 
     # Acceleration: int16 milli-g, /1000 for g
     accel_x = None if accel_x_raw == -32768 else accel_x_raw / 1000.0
