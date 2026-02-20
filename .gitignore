@@ -1,0 +1,6 @@
+build/
+cmake-build/
+sdkconfig
+sdkconfig.old
+managed-components
+mpy.bin
