@@ -4,8 +4,8 @@
     <option name="sdkName" value="Python 3.13 (G4-ble-oscilloscope)" />
   </component>
   <component name="CMakePythonSetting">
-    <option name="pythonIntegrationState" value="YES" />
+    <option name="pythonIntegrationState" value="NO" />
   </component>
   <component name="CMakeWorkspace" PROJECT_DIR="$PROJECT_DIR$" />
-  <component name="WestSettings"><![CDATA[{}]]></component>
+  <component name="WestSettings">{}</component>
 </project>
