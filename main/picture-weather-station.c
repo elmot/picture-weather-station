@@ -5,7 +5,7 @@
 #include "esp_log.h"
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_panel_ops.h"
-#include "esp_lcd_panel_vendor.h"
+#include "esp_lcd_ili9341.h"
 #include "driver/spi_master.h"
 #include "driver/i2c_master.h"
 #include "driver/gpio.h"
@@ -19,7 +19,7 @@ static_assert(sizeof(CONFIG_PWS_WIFI_PASSWORD) > 1, "WiFi password can not be em
 
 static const char *TAG = "picture-ws";
 /*-----------------------------------------------------------------------
- * Unihiker K10 LCD wiring (ST7789, 240×240)
+ * Unihiker K10 LCD wiring (ILI9341, 240×320)
  * Adjust these defines if your board revision differs.
  *---------------------------------------------------------------------*/
 #define LCD_SPI_HOST     SPI2_HOST
@@ -27,8 +27,6 @@ static const char *TAG = "picture-ws";
 #define PIN_LCD_CLK      12
 #define PIN_LCD_CS       14
 #define PIN_LCD_DC       13
-//#define PIN_LCD_RST      14
-#define PIN_LCD_BL       21
 
 /*-----------------------------------------------------------------------
  * I2C bus
@@ -51,7 +49,7 @@ i2c_master_bus_handle_t s_i2c_bus;
 static i2c_master_dev_handle_t s_xl9535;
 
 #define LCD_H_RES        240
-#define LCD_V_RES        240
+#define LCD_V_RES        320
 #define LCD_CLK_HZ       (40 * 1000 * 1000)
 
 static esp_lcd_panel_handle_t s_panel;
@@ -63,7 +61,7 @@ extern const uint8_t png_start[] asm("_binary_wind_fox_a_png_start");
 extern const uint8_t png_end[]   asm("_binary_wind_fox_a_png_end");
 
 /*-----------------------------------------------------------------------
- * RGB888 → RGB565, byte-swapped for big-endian SPI transfer to ST7789
+ * RGB888 → RGB565, byte-swapped for big-endian SPI transfer to ILI9341
  *---------------------------------------------------------------------*/
 static uint16_t rgb565(const uint8_t r, const uint8_t g, const uint8_t b)
 {
@@ -79,18 +77,10 @@ static uint16_t rgb565_be(const uint8_t r, const uint8_t g, const uint8_t b)
 }
 
 /*-----------------------------------------------------------------------
- * Initialise SPI bus + ST7789 panel, turn on backlight
+ * Initialise SPI bus + ILI9341 panel, turn on backlight
  *---------------------------------------------------------------------*/
 static void lcd_init(void)
 {
-    /* Backlight GPIO */
-    gpio_config_t bl_cfg = {
-        .pin_bit_mask = 1ULL << PIN_LCD_BL,
-        .mode         = GPIO_MODE_OUTPUT,
-    };
-    gpio_config(&bl_cfg);
-    gpio_set_level(PIN_LCD_BL, 1);
-
     /* SPI bus */
     spi_bus_config_t bus = {
         .mosi_io_num   = PIN_LCD_MOSI,
@@ -115,12 +105,12 @@ static void lcd_init(void)
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(LCD_SPI_HOST, &io_cfg, &io));
 
-    /* ST7789 panel driver */
+    /* ILI9341 panel driver */
     esp_lcd_panel_dev_config_t dev_cfg = {
         .rgb_ele_order   = LCD_RGB_ELEMENT_ORDER_RGB,
         .bits_per_pixel  = 16,
     };
-    ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(io, &dev_cfg, &s_panel));
+    ESP_ERROR_CHECK(esp_lcd_new_panel_ili9341(io, &dev_cfg, &s_panel));
 
     ESP_ERROR_CHECK(esp_lcd_panel_reset(s_panel));
     ESP_ERROR_CHECK(esp_lcd_panel_init(s_panel));
@@ -161,6 +151,7 @@ static void xl9535_init(void)
     };
     ESP_ERROR_CHECK(i2c_master_bus_add_device(s_i2c_bus, &dev_cfg, &s_xl9535));
 
+    /* Backlight GPIO */
     /* Set pin 0 of port 0 as output (clear bit 0, default 0xFF = all inputs) */
     uint8_t cfg_cmd[] = { XL9535_REG_CFG0, 0xFE };
     ESP_ERROR_CHECK(i2c_master_transmit(s_xl9535, cfg_cmd, sizeof(cfg_cmd), -1));
