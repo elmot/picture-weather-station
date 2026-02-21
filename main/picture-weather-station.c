@@ -30,7 +30,7 @@ static const char *TAG = "picture-ws";
 #define I2C_SCL          48
 #define I2C_CLK_HZ       (400 * 1000)
 
-static i2c_master_bus_handle_t s_i2c_bus;
+i2c_master_bus_handle_t s_i2c_bus;
 
 /*-----------------------------------------------------------------------
  * XL9535 I2C port extender
@@ -159,7 +159,6 @@ static void xl9535_init(void)
 
     ESP_LOGI(TAG, "XL9535 pin 0 → output HIGH");
 }
-
 /*-----------------------------------------------------------------------
  * Fill the entire screen with a single RGB888 colour
  * Equivalent to: screen.show_bg(color=...)
@@ -237,7 +236,7 @@ static void draw_pbm(const uint8_t *data, size_t size, int ox, int oy)
     free(line);
     ESP_LOGI(TAG, "PBM drawn at (%d,%d)", ox, oy);
 }
-
+void sensor_task(void  *);
 /*-----------------------------------------------------------------------
  * app_main — direct translation of mpy/main.py
  *---------------------------------------------------------------------*/
@@ -246,6 +245,8 @@ void app_main(void)
 
     i2c_init();
     xl9535_init();
+
+    xTaskCreate(sensor_task, "sensor", 4096, NULL, 5, NULL);
 
     lcd_init();
     /* screen.show_bg(color=0xFFFF00) */
