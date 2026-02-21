@@ -20,4 +20,16 @@ menu "Picture Weather Station"
             The 4 hex-digit MAC address tail (advertised by the Ruuvi Tag as local name suffix)
             (e.g. "E524").
 
+    config PWS_LAT
+        string "Latitude"
+        default "60.25"
+        help
+            Latitude coordinate for weather station location (decimal degrees, e.g. "60.1699").
+
+    config PWS_LON
+        string "Longitude"
+        default "20.27"
+        help
+            Longitude coordinate for weather station location (decimal degrees, e.g. "24.9384").
+
 endmenu

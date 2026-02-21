@@ -257,6 +257,7 @@ static void draw_png(const uint8_t *data, size_t size, int ox, int oy)
 void sensor_task(void  *);
 void wifi_init_sta(void);
 void ruuvi_task_init(void);
+void weather_task_init(void);
 /*-----------------------------------------------------------------------
  * app_main — direct translation of mpy/main.py
  *---------------------------------------------------------------------*/
@@ -272,6 +273,7 @@ _Noreturn void app_main(void)
 
     wifi_init_sta();
     ruuvi_task_init();
+    weather_task_init();
 
     i2c_init();
     xl9535_init();

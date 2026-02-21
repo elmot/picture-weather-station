@@ -1,5 +1,6 @@
 dependencies:
   espressif/libpng:
-    version: "*"
+    version: '*'
   espressif/esp_lcd_ili9341:
-    version: "*"
+    version: '*'
+  espressif/cjson: ^1.7.19~1
