@@ -9,9 +9,15 @@
 #include "driver/spi_master.h"
 #include "driver/i2c_master.h"
 #include "driver/gpio.h"
+#include "nvs_flash.h"
+
+static_assert(sizeof(CONFIG_PWS_WIFI_SSID) > 1, "WiFi SSID can not be empty. "
+    "Define CONFIG_PWS_WIFI_SSID via `idf.py menuconfig` or in `skdconfig.secrets` file");
+
+static_assert(sizeof(CONFIG_PWS_WIFI_PASSWORD) > 1, "WiFi password can not be empty. "
+    "Define CONFIG_PWS_WIFI_PASSWORD via `idf.py menuconfig` or in `skdconfig.secrets` file");
 
 static const char *TAG = "picture-ws";
-
 /*-----------------------------------------------------------------------
  * Unihiker K10 LCD wiring (ST7789, 240×240)
  * Adjust these defines if your board revision differs.
@@ -258,11 +264,23 @@ static void draw_png(const uint8_t *data, size_t size, int ox, int oy)
 }
 
 void sensor_task(void  *);
+void wifi_init_sta(void);
+void ruuvi_task_init(void);
 /*-----------------------------------------------------------------------
  * app_main — direct translation of mpy/main.py
  *---------------------------------------------------------------------*/
 _Noreturn void app_main(void)
 {
+    /* NVS — required by WiFi and BLE */
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    wifi_init_sta();
+    ruuvi_task_init();
 
     i2c_init();
     xl9535_init();

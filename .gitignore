@@ -2,5 +2,6 @@ build/
 cmake-build/
 sdkconfig
 sdkconfig.old
+sdkconfig.secrets
 managed_components
 mpy.bin

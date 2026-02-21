@@ -1,0 +1,23 @@
+menu "Picture Weather Station"
+
+    config PWS_WIFI_SSID
+        string "WiFi SSID"
+        default ""
+        help
+            SSID (network name) to connect to.
+
+	config PWS_WIFI_PASSWORD
+		string "WiFi Password"
+		default ""
+		help
+			WiFi password (WPA2).
+
+    config PWS_RUUVI_SIGNATURE
+        hex "Ruuvi Tag BLE signature (4 hex digits)"
+        default 0x0
+        range 0x0000 0xFFFF
+        help
+            The 4 hex-digit MAC address tail (advertised by the Ruuvi Tag as local name suffix)
+            (e.g. "E524").
+
+endmenu
