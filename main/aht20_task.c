@@ -13,7 +13,7 @@ static const char *TAG = "sensor-ws";
 #define AHT20_CMD_INIT   0xBE
 #define AHT20_CMD_MEAS   0xAC
 #define AHT20_INTERVAL   (5 * 1000)      /* 15 min in ms */
-//#define AHT20_INTERVAL   (15 * 60 * 1000)      /* 15 min in ms */
+//#define AHT20_INTERVAL   (15 * 60 * 1000)      /* 15 min in ms */ //todo restore
 #define AHT20_HISTORY    96                     /* 24 h worth of readings */
 #define I2C_TIMEOUT      100
 typedef struct {
