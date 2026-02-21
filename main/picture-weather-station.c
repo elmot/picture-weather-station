@@ -1,4 +1,5 @@
 #include <string.h>
+#include <png.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -47,23 +48,28 @@ static i2c_master_dev_handle_t s_xl9535;
 #define LCD_V_RES        240
 #define LCD_CLK_HZ       (40 * 1000 * 1000)
 
-/*-----------------------------------------------------------------------
- * PBM image embedded in flash (see EMBED_FILES in CMakeLists.txt)
- *---------------------------------------------------------------------*/
-extern const uint8_t pbm_start[] asm("_binary_wind_fox_pbm_start");
-extern const uint8_t pbm_end[]   asm("_binary_wind_fox_pbm_end");
-
 static esp_lcd_panel_handle_t s_panel;
+
+/*-----------------------------------------------------------------------
+ * PNG image embedded in flash (see EMBED_FILES in CMakeLists.txt)
+ *---------------------------------------------------------------------*/
+extern const uint8_t png_start[] asm("_binary_wind_fox_a_png_start");
+extern const uint8_t png_end[]   asm("_binary_wind_fox_a_png_end");
 
 /*-----------------------------------------------------------------------
  * RGB888 → RGB565, byte-swapped for big-endian SPI transfer to ST7789
  *---------------------------------------------------------------------*/
-static inline uint16_t rgb565_be(uint32_t rgb)
+static uint16_t rgb565(const uint8_t r, const uint8_t g, const uint8_t b)
 {
-    uint16_t c = (uint16_t)(((rgb >> 8) & 0xF800)
-                          | ((rgb >> 5) & 0x07E0)
-                          | ((rgb >> 3) & 0x001F));
-    return __builtin_bswap16(c);
+    uint16_t c = (uint16_t)(((b << 8) & 0xF800)
+        | ((g << 3) & 0x07E0)
+        | ((r >> 3) & 0x001F));
+    return c;
+}
+
+static uint16_t rgb565_be(const uint8_t r, const uint8_t g, const uint8_t b)
+{
+    return __builtin_bswap16(rgb565(r, g, b));
 }
 
 /*-----------------------------------------------------------------------
@@ -91,7 +97,7 @@ static void lcd_init(void)
     ESP_ERROR_CHECK(spi_bus_initialize(LCD_SPI_HOST, &bus, SPI_DMA_CH_AUTO));
 
     /* SPI panel IO */
-    esp_lcd_panel_io_handle_t io = NULL;
+    esp_lcd_panel_io_handle_t io = nullptr;
     esp_lcd_panel_io_spi_config_t io_cfg = {
         .dc_gpio_num       = PIN_LCD_DC,
         .cs_gpio_num       = PIN_LCD_CS,
@@ -114,7 +120,7 @@ static void lcd_init(void)
     ESP_ERROR_CHECK(esp_lcd_panel_init(s_panel));
 
     /* dir=2 in MicroPython → 180° rotation → mirror both axes */
-    ESP_ERROR_CHECK(esp_lcd_panel_mirror(s_panel, true, true));
+    ESP_ERROR_CHECK(esp_lcd_panel_mirror(s_panel, false, true));
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(s_panel, true));
 
     ESP_LOGI(TAG, "LCD initialised (%dx%d)", LCD_H_RES, LCD_V_RES);
@@ -163,9 +169,9 @@ static void xl9535_init(void)
  * Fill the entire screen with a single RGB888 colour
  * Equivalent to: screen.show_bg(color=...)
  *---------------------------------------------------------------------*/
-static void fill_screen(uint32_t colour)
+static void fill_screen(const uint8_t r, const uint8_t g, const uint8_t b)
 {
-    uint16_t c = rgb565_be(colour);
+    uint16_t c = rgb565_be(r, g, b);
 
     uint16_t *row = heap_caps_malloc(LCD_H_RES * sizeof(uint16_t),
                                      MALLOC_CAP_DMA);
@@ -180,80 +186,94 @@ static void fill_screen(uint32_t colour)
 }
 
 /*-----------------------------------------------------------------------
- * Parse and draw a binary PBM (P4) image from memory
- * Equivalent to: load_pbm(filename, offset_x, offset_y)
+ * Custom read callback for libpng to read from memory
  *---------------------------------------------------------------------*/
-static void draw_pbm(const uint8_t *data, size_t size, int ox, int oy)
+typedef struct {
+    const uint8_t *data;
+    size_t         offset;
+} png_mem_read_t;
+
+static void png_mem_read_fn(png_structp png, png_bytep out, size_t count)
 {
-    const uint8_t *p   = data;
-    const uint8_t *end = data + size;
-
-    /* --- magic "P4" ------------------------------------------------ */
-    if (p + 3 > end || p[0] != 'P' || p[1] != '4') {
-        ESP_LOGE(TAG, "Not a valid P4 PBM file");
-        return;
-    }
-    p += 2;
-    while (p < end && *p != '\n') p++;
-    p++;
-
-    /* --- skip comment lines ---------------------------------------- */
-    while (p < end && *p == '#') {
-        while (p < end && *p != '\n') p++;
-        p++;
-    }
-
-    /* --- width and height ------------------------------------------ */
-    int w = 0, h = 0;
-    while (p < end && *p >= '0' && *p <= '9') { w = w * 10 + (*p++ - '0'); }
-    while (p < end && (*p == ' ' || *p == '\t' || *p == '\r')) p++;
-    while (p < end && *p >= '0' && *p <= '9') { h = h * 10 + (*p++ - '0'); }
-    while (p < end && *p != '\n') p++;
-    p++;                                        /* skip to pixel data */
-
-    ESP_LOGI(TAG, "PBM image: %dx%d", w, h);
-
-    int row_bytes = (w + 7) / 8;
-    uint16_t white = rgb565_be(0xFFFFFF);
-    uint16_t black = rgb565_be(0x000000);
-
-    uint16_t *line = heap_caps_malloc(w * sizeof(uint16_t), MALLOC_CAP_DMA);
-    assert(line);
-
-    for (int row = 0; row < h; row++) {
-        const uint8_t *src = p + row * row_bytes;
-        if (src + row_bytes > end) break;
-
-        for (int col = 0; col < w; col++) {
-            int bit = (src[col / 8] >> (7 - col % 8)) & 1;
-            line[col] = bit ? black : white;   /* PBM: 1=black, 0=white */
-        }
-        esp_lcd_panel_draw_bitmap(s_panel,
-                                  ox, oy + row,
-                                  ox + w, oy + row + 1,
-                                  line);
-    }
-    free(line);
-    ESP_LOGI(TAG, "PBM drawn at (%d,%d)", ox, oy);
+    png_mem_read_t *state = (png_mem_read_t *)png_get_io_ptr(png);
+    memcpy(out, state->data + state->offset, count);
+    state->offset += count;
 }
+
+/*-----------------------------------------------------------------------
+ * Decode embedded PNG and draw at (ox, oy)
+ *---------------------------------------------------------------------*/
+static void draw_png(const uint8_t *data, size_t size, int ox, int oy)
+{
+    png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING,
+                                            nullptr, nullptr, nullptr);
+    assert(png);
+    png_infop info = png_create_info_struct(png);
+    assert(info);
+
+    png_mem_read_t state = { .data = data, .offset = 0 };
+    png_set_read_fn(png, &state, png_mem_read_fn);
+    png_read_info(png, info);
+
+    int w = png_get_image_width(png, info);
+    int h = png_get_image_height(png, info);
+    png_byte color_type = png_get_color_type(png, info);
+    png_byte bit_depth  = png_get_bit_depth(png, info);
+
+    ESP_LOGI(TAG, "PNG: %dx%d, color_type=%d, bit_depth=%d", w, h,
+             color_type, bit_depth);
+
+    /* Normalize to 8-bit RGB */
+    if (bit_depth == 16) png_set_strip_16(png);
+    if (color_type == PNG_COLOR_TYPE_PALETTE) png_set_palette_to_rgb(png);
+    if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
+        png_set_expand_gray_1_2_4_to_8(png);
+    if (png_get_valid(png, info, PNG_INFO_tRNS)) png_set_tRNS_to_alpha(png);
+    if (color_type == PNG_COLOR_TYPE_GRAY ||
+        color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
+        png_set_gray_to_rgb(png);
+    /* Strip alpha — we don't need it for the LCD */
+    if (color_type & PNG_COLOR_MASK_ALPHA) png_set_strip_alpha(png);
+
+    png_read_update_info(png, info);
+
+    /* Allocate one row of RGB888 and one row of RGB565 for DMA */
+    png_bytep row_rgb = malloc(png_get_rowbytes(png, info));
+    uint16_t *row_565 = heap_caps_malloc(w * sizeof(uint16_t), MALLOC_CAP_DMA);
+    assert(row_rgb && row_565);
+
+    for (int y = 0; y < h; y++) {
+        png_read_row(png, row_rgb, nullptr);
+        for (int x = 0; x < w; x++) {
+            row_565[x] = rgb565_be(row_rgb[x * 3 + 0], row_rgb[x * 3 + 1], row_rgb[x * 3 + 2]);
+        }
+        esp_lcd_panel_draw_bitmap(s_panel, ox, oy + y, ox + w, oy + y + 1,
+                                  row_565);
+    }
+
+    free(row_rgb);
+    free(row_565);
+    png_destroy_read_struct(&png, &info, nullptr);
+    ESP_LOGI(TAG, "PNG drawn at (%d,%d)", ox, oy);
+}
+
 void sensor_task(void  *);
 /*-----------------------------------------------------------------------
  * app_main — direct translation of mpy/main.py
  *---------------------------------------------------------------------*/
-void app_main(void)
+_Noreturn void app_main(void)
 {
 
     i2c_init();
     xl9535_init();
 
-    xTaskCreate(sensor_task, "sensor", 4096, NULL, 5, NULL);
+    xTaskCreate(sensor_task, "sensor", 4096, nullptr, 5, nullptr);
 
     lcd_init();
     /* screen.show_bg(color=0xFFFF00) */
-    fill_screen(0xFFFF00);
+    fill_screen(0xFF, 0x7F, 0x00);
 
-    /* load_pbm('wind-fox.pbm') */
-    draw_pbm(pbm_start, pbm_end - pbm_start, 0, 0);
+    draw_png(png_start, png_end - png_start, 0, 0);
 
     ESP_LOGI(TAG, "Done");
 

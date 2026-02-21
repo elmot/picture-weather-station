@@ -1,6 +1,6 @@
 <component name="DebugServers">
   <esp-idf-debug-target name="ESP-IDF" uniqueID="7fc28d95-9072-427c-a4d4-c8edd99fdc0d" selected="true">
     <console enabled="false" />
-    <target auto-start-monitor="false" />
+    <target />
   </esp-idf-debug-target>
 </component>
