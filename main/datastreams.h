@@ -33,7 +33,7 @@ typedef struct {
     const char* wind_dir; /* "N","NE",… */
     float pressure;       /* hPa */
     int code;             /* WMO weather code */
-    char* icon_png;       /* pointer to embedded PNG data */
+    bool is_day;          /* true if daytime */
     TickType_t last_update;
 } meteo_data_t;
 

@@ -1,8 +1,9 @@
+.claude/
+.slint-tools/
 build/
 cmake-build/
+managed_components/
+mpy.bin/
 sdkconfig
 sdkconfig.old
 sdkconfig.secrets
-managed_components
-mpy.bin
-.claude
