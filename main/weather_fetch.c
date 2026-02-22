@@ -13,7 +13,6 @@
 
 #define WIFI_CONNECTED_BIT  BIT0
 #define WIFI_FAIL_BIT       BIT1
-#define MAX_RETRY           500
 
 static_assert(sizeof(CONFIG_PWS_WIFI_SSID) > 1, "WiFi SSID can not be empty. "
               "Define CONFIG_PWS_WIFI_SSID via `idf.py menuconfig` or in `skdconfig.secrets` file");
@@ -21,76 +20,60 @@ static_assert(sizeof(CONFIG_PWS_WIFI_SSID) > 1, "WiFi SSID can not be empty. "
 static_assert(sizeof(CONFIG_PWS_WIFI_PASSWORD) > 1, "WiFi password can not be empty. "
               "Define CONFIG_PWS_WIFI_PASSWORD via `idf.py menuconfig` or in `skdconfig.secrets` file");
 
-
-static const char* TAG = "wifi";
-volatile meteo_data_t g_meteo = {
-    .temp = NAN, .feels = NAN, .humidity = NAN,
-    .wind_speed = NAN, .wind_gusts = NAN, .wind_dir = "",
-    .pressure = NAN, .code = -1, .icon_png = nullptr, .last_update = 0,
-};
-
-//#define FETCH_INTERVAL_MS (15 * 60 * 1000) /* 15 min */ //todo restore
-#define FETCH_INTERVAL_MS  (5 * 1000)   /* 15 min */
-#define MAX_RESPONSE_SIZE  4096
-
-#define WEATHER_HOST "https://api.open-meteo.com"
-#define WEATHER_URL WEATHER_HOST\
-"/v1/forecast?latitude=" CONFIG_PWS_LAT \
-"&longitude=" CONFIG_PWS_LON \
-"&models=metno_seamless&current=temperature_2m,relative_humidity_2m,apparent_temperature,snowfall,showers,rain,is_day,precipitation,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_gusts_10m,wind_direction_10m,wind_speed_10m&wind_speed_unit=ms"
-
-struct icon_info
+struct icon_info_t
 {
     const int code;
     const void* day;
     const void* night;
 };
-extern const uint8_t _binary_wmo_icon_00d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_00n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_01d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_01n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_02d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_02n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_03d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_03n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_45d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_45n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_53d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_53n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_57d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_57n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_61d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_61n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_63d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_63n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_65d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_65n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_66d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_66n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_67d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_67n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_71d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_71n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_73d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_73n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_75d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_75n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_80d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_80n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_81d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_81n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_84d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_84n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_85d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_85n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_86d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_86n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_95d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_95n_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_96d_png_start; // NOLINT(*-reserved-identifier)
-extern const uint8_t _binary_wmo_icon_96n_png_start; // NOLINT(*-reserved-identifier)
 
-static const struct icon_info icon_info_table[] = {
+extern const char _binary_wifi_wait_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_00d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_00n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_01d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_01n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_02d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_02n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_03d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_03n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_45d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_45n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_53d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_53n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_57d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_57n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_61d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_61n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_63d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_63n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_65d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_65n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_66d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_66n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_67d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_67n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_71d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_71n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_73d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_73n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_75d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_75n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_80d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_80n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_81d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_81n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_84d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_84n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_85d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_85n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_86d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_86n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_95d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_95n_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_96d_png_start; // NOLINT(*-reserved-identifier)
+extern const char _binary_wmo_icon_96n_png_start; // NOLINT(*-reserved-identifier)
+
+static const struct icon_info_t icon_info_table[] = { // NOLINT(*-interfaces-global-init)
   {.code=00, .day=&_binary_wmo_icon_00d_png_start , .night= &_binary_wmo_icon_00n_png_start},
   {.code=01, .day=&_binary_wmo_icon_01d_png_start , .night= &_binary_wmo_icon_01n_png_start},
   {.code=02, .day=&_binary_wmo_icon_02d_png_start , .night= &_binary_wmo_icon_02n_png_start},
@@ -112,8 +95,25 @@ static const struct icon_info icon_info_table[] = {
   {.code=85, .day=&_binary_wmo_icon_85d_png_start , .night= &_binary_wmo_icon_85n_png_start},
   {.code=86, .day=&_binary_wmo_icon_86d_png_start , .night= &_binary_wmo_icon_86n_png_start},
   {.code=89, .day=&_binary_wmo_icon_86n_png_start , .night= &_binary_wmo_icon_86n_png_start},
-      
+
 };
+
+static const char* TAG = "wifi";
+volatile meteo_data_t g_meteo = { // NOLINT(*-interfaces-global-init)
+    .temp = NAN, .feels = NAN, .humidity = NAN,
+    .wind_speed = NAN, .wind_gusts = NAN, .wind_dir = "",
+    .pressure = NAN, .code = -1, .icon_png = (void*)&_binary_wifi_wait_png_start, .last_update = 0,
+};
+
+//#define FETCH_INTERVAL_MS (15 * 60 * 1000) /* 15 min */ //todo restore
+#define FETCH_INTERVAL_MS  (5 * 1000)   /* 15 min */
+#define MAX_RESPONSE_SIZE  4096
+
+#define WEATHER_HOST "https://api.open-meteo.com"
+#define WEATHER_URL WEATHER_HOST\
+"/v1/forecast?latitude=" CONFIG_PWS_LAT \
+"&longitude=" CONFIG_PWS_LON \
+"&models=metno_seamless&current=temperature_2m,relative_humidity_2m,apparent_temperature,snowfall,showers,rain,is_day,precipitation,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_gusts_10m,wind_direction_10m,wind_speed_10m&wind_speed_unit=ms"
 
 /*-----------------------------------------------------------------------
  * Find icon by weather code and day/night status
@@ -184,26 +184,29 @@ static void weather_fetch_and_parse(void)
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "HTTP request failed: %s", esp_err_to_name(err));
+        g_meteo.icon_png = (void*)&_binary_wifi_wait_png_start;
         return;
     }
 
     if (status != 200)
     {
         ESP_LOGW(TAG, "HTTP status %d", status);
+        g_meteo.icon_png = (void*)&_binary_wifi_wait_png_start;
         return;
     }
 
     ESP_LOGI(TAG, "Received %d bytes from %s", (int)resp.len, WEATHER_HOST);
 
     cJSON* root = cJSON_Parse(resp.buf);
+    const cJSON* current = cJSON_GetObjectItem(root, "current");
 
-    if (!root)
+    if (!current)
     {
         ESP_LOGE(TAG, "JSON parse error");
+        g_meteo.icon_png = (void*)&_binary_wifi_wait_png_start;
         return;
     }
 
-    const cJSON* current = cJSON_GetObjectItem(root, "current");
     const int wind_dir = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_direction_10m"));
     const unsigned int wind_sector = ((wind_dir + 22) % 360 / 45) % 8;
     const char* wind_dir_name = wind_names[wind_sector];
@@ -235,14 +238,9 @@ static void event_handler(void *arg, esp_event_base_t event_base,
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_retry_num < MAX_RETRY) {
             esp_wifi_connect();
             s_retry_num++;
-            ESP_LOGI(TAG, "Retrying connection (%d/%d)", s_retry_num, MAX_RETRY);
-        } else {
-            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
-            ESP_LOGW(TAG, "Failed to connect after %d attempts", MAX_RETRY);
-        }
+            ESP_LOGI(TAG, "Retrying connection %d...", s_retry_num);
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
