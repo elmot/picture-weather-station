@@ -1,4 +1,5 @@
 #include <string.h>
+#include <math.h>
 #include <png.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -8,14 +9,38 @@
 #include "esp_lcd_ili9341.h"
 #include "driver/spi_master.h"
 #include "driver/i2c_master.h"
-#include "driver/gpio.h"
 #include "nvs_flash.h"
 #include "lvgl.h"
 extern volatile char* internet_weather_icon_png;
+extern volatile TickType_t internet_weather_last_update;
+extern volatile float internet_weather_temp;
+extern volatile float internet_weather_feels;
+extern volatile float internet_weather_humidity;
+extern volatile float internet_weather_wind_speed;
+extern volatile float internet_weather_wind_gusts;
+extern volatile const char* internet_weather_wind_dir;
+extern volatile float internet_weather_pressure;
+extern volatile float aht20_temperature;
+extern volatile float aht20_humidity;
+
+typedef struct {
+    float temperature;
+    float humidity;
+    float pressure_mmhg;
+    float battery_voltage;
+    uint8_t mac_address[6];
+} ruuvi_data_t;
+extern ruuvi_data_t g_ruuvi_data;
+
 char* shown_icon_ptr = nullptr;
 
 static lv_obj_t* internet_weather_icon_obj = nullptr;
 static lv_color_t* internet_weather_icon_pixels = nullptr;
+static lv_obj_t* lbl_outdoor = nullptr;
+static lv_obj_t* lbl_wind = nullptr;
+static lv_obj_t* lbl_pressure = nullptr;
+static lv_obj_t* lbl_indoor = nullptr;
+static lv_obj_t* lbl_ruuvi = nullptr;
 static_assert(sizeof(CONFIG_PWS_WIFI_SSID) > 1, "WiFi SSID can not be empty. "
               "Define CONFIG_PWS_WIFI_SSID via `idf.py menuconfig` or in `skdconfig.secrets` file");
 
@@ -121,7 +146,7 @@ static void lvgl_init(void)
 void lvgl_render(void)
 {
     lv_tick_inc(100);
-    lv_refr_now(NULL);
+    lv_refr_now(nullptr);
 }
 
 /*-----------------------------------------------------------------------
@@ -165,7 +190,7 @@ static void lcd_init(void)
     ESP_ERROR_CHECK(esp_lcd_panel_init(s_panel));
 
     /* dir=2 in MicroPython -> 180 deg rotation -> mirror both axes */
-    ESP_ERROR_CHECK(esp_lcd_panel_mirror(s_panel, true, true));
+    ESP_ERROR_CHECK(esp_lcd_panel_mirror(s_panel, false, true));
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(s_panel, true));
 
     ESP_LOGI(TAG, "LCD initialised (%dx%d)", LCD_H_RES, LCD_V_RES);
@@ -338,7 +363,42 @@ _Noreturn void app_main(void)
     fox_img = decode_png_to_lvgl(&_binary_wind_fox_a_png_start);
     lv_obj_t *img = lv_img_create(lv_scr_act());
     lv_img_set_src(img, &fox_img);
-    lv_obj_align(img, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_obj_align(img, LV_ALIGN_TOP_RIGHT, 0, 0);
+
+    /* Create weather data labels */
+    static lv_style_t style_lbl;
+    lv_style_init(&style_lbl);
+    lv_style_set_text_color(&style_lbl, lv_color_white());
+    lv_style_set_text_font(&style_lbl, &lv_font_montserrat_14);
+
+    #define LABEL_X 4
+    #define LABEL_Y_START 165
+    #define LABEL_SPACING 18
+
+    lbl_outdoor = lv_label_create(lv_scr_act());
+    lv_obj_add_style(lbl_outdoor, &style_lbl, 0);
+    lv_obj_set_pos(lbl_outdoor, LABEL_X, LABEL_Y_START);
+    lv_label_set_text(lbl_outdoor, "");
+
+    lbl_wind = lv_label_create(lv_scr_act());
+    lv_obj_add_style(lbl_wind, &style_lbl, 0);
+    lv_obj_set_pos(lbl_wind, LABEL_X, LABEL_Y_START + LABEL_SPACING);
+    lv_label_set_text(lbl_wind, "");
+
+    lbl_pressure = lv_label_create(lv_scr_act());
+    lv_obj_add_style(lbl_pressure, &style_lbl, 0);
+    lv_obj_set_pos(lbl_pressure, LABEL_X, LABEL_Y_START + LABEL_SPACING * 2);
+    lv_label_set_text(lbl_pressure, "");
+
+    lbl_indoor = lv_label_create(lv_scr_act());
+    lv_obj_add_style(lbl_indoor, &style_lbl, 0);
+    lv_obj_set_pos(lbl_indoor, LABEL_X, LABEL_Y_START + LABEL_SPACING * 3);
+    lv_label_set_text(lbl_indoor, "");
+
+    lbl_ruuvi = lv_label_create(lv_scr_act());
+    lv_obj_add_style(lbl_ruuvi, &style_lbl, 0);
+    lv_obj_set_pos(lbl_ruuvi, LABEL_X, LABEL_Y_START + LABEL_SPACING * 4);
+    lv_label_set_text(lbl_ruuvi, "");
 
     lvgl_render();
 
@@ -346,6 +406,7 @@ _Noreturn void app_main(void)
 
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(1000));
+        bool need_render = false;
 
         /* Check if internet weather icon is available and not yet displayed */
         if (internet_weather_icon_png != nullptr && shown_icon_ptr != internet_weather_icon_png)
@@ -356,10 +417,40 @@ _Noreturn void app_main(void)
             internet_weather_icon_pixels = (lv_color_t*)internet_weather_icon_img.data;
             internet_weather_icon_obj = lv_img_create(lv_scr_act());
             lv_img_set_src(internet_weather_icon_obj, &internet_weather_icon_img);
-            lv_obj_align(internet_weather_icon_obj, LV_ALIGN_TOP_RIGHT, 0, 0);
-            lvgl_render();
-            
+            lv_obj_align(internet_weather_icon_obj, LV_ALIGN_TOP_LEFT, 0, 80);
+            need_render = true;
             ESP_LOGI(TAG, "Internet weather icon displayed");
+        }
+
+        /* Update weather labels */
+        if (!isnan(internet_weather_temp)) {
+            lv_label_set_text_fmt(lbl_outdoor, "%.1f\xc2\xb0""C (feels %.1f\xc2\xb0""C) %.0f%%",
+                internet_weather_temp, internet_weather_feels, internet_weather_humidity);
+            need_render = true;
+        }
+        if (!isnan(internet_weather_wind_speed)) {
+            lv_label_set_text_fmt(lbl_wind, "Wind: %s %.1f (%.1f) m/s",
+                internet_weather_wind_dir, internet_weather_wind_speed, internet_weather_wind_gusts);
+            need_render = true;
+        }
+        if (!isnan(internet_weather_pressure)) {
+            lv_label_set_text_fmt(lbl_pressure, "Pressure: %.0f hPa",
+                internet_weather_pressure);
+            need_render = true;
+        }
+        if (!isnan(aht20_temperature)) {
+            lv_label_set_text_fmt(lbl_indoor, "Indoor: %.1f\xc2\xb0""C  %.0f%%",
+                aht20_temperature, aht20_humidity);
+            need_render = true;
+        }
+        if (g_ruuvi_data.temperature != 0 || g_ruuvi_data.humidity != 0) {
+            lv_label_set_text_fmt(lbl_ruuvi, "Ruuvi: %.1f\xc2\xb0""C %.0f%% %.0fmm",
+                g_ruuvi_data.temperature, g_ruuvi_data.humidity, g_ruuvi_data.pressure_mmhg);
+            need_render = true;
+        }
+
+        if (need_render) {
+            lvgl_render();
         }
     }
 }

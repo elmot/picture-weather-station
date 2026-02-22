@@ -1,4 +1,5 @@
 #include <string.h>
+#include <math.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -20,6 +21,9 @@ typedef struct {
     float temperature;   /* °C  */
     float humidity;      /* %RH */
 } sensor_reading_t;
+
+volatile float aht20_temperature = NAN;
+volatile float aht20_humidity = NAN;
 
 static i2c_master_dev_handle_t s_aht20;
 static sensor_reading_t s_readings[AHT20_HISTORY];
@@ -96,6 +100,8 @@ _Noreturn void sensor_task(void *arg)
     for (;;) {
         float t, h;
         if (aht20_read(&t, &h) == ESP_OK) {
+            aht20_temperature = t;
+            aht20_humidity = h;
             s_readings[s_reading_head].temperature = t;
             s_readings[s_reading_head].humidity    = h;
             s_reading_head = (s_reading_head + 1) % AHT20_HISTORY;

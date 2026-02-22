@@ -1,4 +1,5 @@
 #include <string.h>
+#include <math.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -10,6 +11,13 @@ static const char* TAG = "weather";
 volatile int internet_weather_code = -1;
 volatile TickType_t internet_weather_last_update = 0ul;
 volatile char* internet_weather_icon_png = nullptr;
+volatile float internet_weather_temp = NAN;
+volatile float internet_weather_feels = NAN;
+volatile float internet_weather_humidity = NAN;
+volatile float internet_weather_wind_speed = NAN;
+volatile float internet_weather_wind_gusts = NAN;
+volatile const char* internet_weather_wind_dir = "";
+volatile float internet_weather_pressure = NAN;
 
 //#define FETCH_INTERVAL_MS (15 * 60 * 1000) /* 15 min */ //todo restore
 #define FETCH_INTERVAL_MS  (5 * 1000)   /* 15 min */
@@ -191,15 +199,20 @@ static void weather_fetch_and_parse(void)
     const char* wind_dir_name = wind_names[wind_sector];
     const bool is_day = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "is_day"));
     internet_weather_code = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "weather_code"));
+    internet_weather_temp = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "temperature_2m"));
+    internet_weather_feels = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "apparent_temperature"));
+    internet_weather_humidity = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "relative_humidity_2m"));
+    internet_weather_wind_speed = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_speed_10m"));
+    internet_weather_wind_gusts = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_gusts_10m"));
+    internet_weather_wind_dir = wind_dir_name;
+    internet_weather_pressure = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "pressure_msl"));
     internet_weather_last_update = xTaskGetTickCount();
     internet_weather_icon_png = (char*)get_weather_icon(internet_weather_code, is_day);
     ESP_LOGI(TAG, "Weather Code: %d", internet_weather_code);
-    ESP_LOGI(TAG, "Temperature: %.1f C", cJSON_GetNumberValue(cJSON_GetObjectItem(current, "temperature_2m")));
-    ESP_LOGI(TAG, "Humidity: %.0f%%", cJSON_GetNumberValue(cJSON_GetObjectItem(current, "relative_humidity_2m")));
+    ESP_LOGI(TAG, "Temperature: %.1f C", internet_weather_temp);
+    ESP_LOGI(TAG, "Humidity: %.0f%%", internet_weather_humidity);
     ESP_LOGI(TAG, "Wind: %s  %.1f m/s (gusts: %.1f m/s)",
-             wind_dir_name,
-             cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_speed_10m")),
-             cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_gusts_10m")));
+             wind_dir_name, internet_weather_wind_speed, internet_weather_wind_gusts);
     cJSON_Delete(root);
 }
 
