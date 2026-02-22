@@ -3,6 +3,10 @@
 #include <math.h>
 #include "freertos/FreeRTOS.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*-----------------------------------------------------------------------
  * Ruuvi tag data
  *---------------------------------------------------------------------*/
@@ -44,3 +48,7 @@ typedef struct {
 } aht20_data_t;
 
 extern volatile aht20_data_t g_aht20;
+
+#ifdef __cplusplus
+}
+#endif

@@ -4,4 +4,4 @@ dependencies:
   espressif/esp_lcd_ili9341:
     version: '*'
   espressif/cjson: ^1.7.19~1
-  lvgl/lvgl: ^8.4.0
+  slint/slint: ^1.15.1

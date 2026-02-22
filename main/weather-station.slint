@@ -1,0 +1,62 @@
+export component WeatherStation inherits Window {
+    in property <image> weather-icon;
+    in property <string> outdoor-text: "";
+    in property <string> wind-text: "";
+    in property <string> pressure-text: "";
+    in property <string> indoor-text: "";
+    in property <string> ruuvi-text: "";
+    in property <string> status-text: "";
+
+    width: 240px;
+    height: 320px;
+    background: #FF7F00;
+
+    Image {
+        source: @image-url("../pict/wind-fox-a.png");
+        x: parent.width - self.width;
+        y: 0;
+    }
+
+    Image {
+        source: weather-icon;
+        x: 0;
+        y: 80px;
+    }
+
+    Text {
+        x: 4px; y: 165px;
+        text: outdoor-text;
+        color: white;
+        font-size: 14px;
+    }
+    Text {
+        x: 4px; y: 183px;
+        text: wind-text;
+        color: white;
+        font-size: 14px;
+    }
+    Text {
+        x: 4px; y: 201px;
+        text: pressure-text;
+        color: white;
+        font-size: 14px;
+    }
+    Text {
+        x: 4px; y: 219px;
+        text: indoor-text;
+        color: white;
+        font-size: 14px;
+    }
+    Text {
+        x: 4px; y: 237px;
+        text: ruuvi-text;
+        color: white;
+        font-size: 14px;
+    }
+    Text {
+        x: 4px; y: 255px;
+        text: status-text;
+        color: white;
+        font-size: 14px;
+    }
+}
