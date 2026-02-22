@@ -27,8 +27,7 @@ volatile meteo_data_t g_meteo = { // NOLINT(*-interfaces-global-init)
     .pressure = NAN, .code = -1, .is_day = true, .last_update = 0,
 };
 
-//#define FETCH_INTERVAL_MS (15 * 60 * 1000) /* 15 min */ //todo restore
-#define FETCH_INTERVAL_MS  (50 * 1000)   /* 15 min */
+#define FETCH_INTERVAL_MS (15 * 60 * 1000) /* 15 min */
 #define MAX_RESPONSE_SIZE  4096
 
 #define WEATHER_HOST "https://api.open-meteo.com"
