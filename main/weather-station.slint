@@ -1,3 +1,4 @@
+import { HorizontalBox } from "std-widgets.slint";
 export component WeatherStation inherits Window {
     in property <int> weather-code: -1;
     in property <bool> is-day: true;
@@ -6,6 +7,7 @@ export component WeatherStation inherits Window {
     in property <string> pressure-text: "";
     in property <string> indoor-text: "";
     in property <string> ruuvi-text: "";
+    in property <string> adafruit-text: "";
     in property <string> status-text: "";
 
     width: 240px;
@@ -20,108 +22,86 @@ export component WeatherStation inherits Window {
 
     // Wifi-wait icon shown before weather data arrives
     Image {
-        x: 0; y: 80px;
+        x: 0;
+        y: 80px;
         visible: weather-code < 0;
         source: @image-url("../pict/wifi-wait.png");
     }
 
     // Weather icon — day
     Image {
-        x: 0; y: 80px;
-        source:
-            weather-code ==  0 && is-day ? @image-url("../pict/svg_png/wmo_icon_00d.png") :
-            weather-code ==  0 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_00n.png") :
-            weather-code ==  1 && is-day ? @image-url("../pict/svg_png/wmo_icon_01d.png") :
-            weather-code ==  1 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_01n.png") :
-            weather-code ==  2 && is-day ? @image-url("../pict/svg_png/wmo_icon_02d.png") :
-            weather-code ==  2 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_02n.png") :
-            weather-code ==  3 && is-day ? @image-url("../pict/svg_png/wmo_icon_03d.png") :
-            weather-code ==  3 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_03n.png") :
-            weather-code == 45 && is-day ? @image-url("../pict/svg_png/wmo_icon_45d.png") :
-            weather-code == 45 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_45n.png") :
-            weather-code == 48 && is-day ? @image-url("../pict/svg_png/wmo_icon_45d.png") :
-            weather-code == 48 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_45n.png") :
-            weather-code == 51 && is-day ? @image-url("../pict/svg_png/wmo_icon_53d.png") :
-            weather-code == 51 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_53n.png") :
-            weather-code == 53 && is-day ? @image-url("../pict/svg_png/wmo_icon_53d.png") :
-            weather-code == 53 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_53n.png") :
-            weather-code == 55 && is-day ? @image-url("../pict/svg_png/wmo_icon_53d.png") :
-            weather-code == 55 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_53n.png") :
-            weather-code == 56 && is-day ? @image-url("../pict/svg_png/wmo_icon_57d.png") :
-            weather-code == 56 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_57n.png") :
-            weather-code == 57 && is-day ? @image-url("../pict/svg_png/wmo_icon_57d.png") :
-            weather-code == 57 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_57n.png") :
-            weather-code == 61 && is-day ? @image-url("../pict/svg_png/wmo_icon_61d.png") :
-            weather-code == 61 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_61n.png") :
-            weather-code == 63 && is-day ? @image-url("../pict/svg_png/wmo_icon_63d.png") :
-            weather-code == 63 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_63n.png") :
-            weather-code == 65 && is-day ? @image-url("../pict/svg_png/wmo_icon_65d.png") :
-            weather-code == 65 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_65n.png") :
-            weather-code == 66 && is-day ? @image-url("../pict/svg_png/wmo_icon_66d.png") :
-            weather-code == 66 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_66n.png") :
-            weather-code == 67 && is-day ? @image-url("../pict/svg_png/wmo_icon_67d.png") :
-            weather-code == 67 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_67n.png") :
-            weather-code == 71 && is-day ? @image-url("../pict/svg_png/wmo_icon_71d.png") :
-            weather-code == 71 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_71n.png") :
-            weather-code == 73 && is-day ? @image-url("../pict/svg_png/wmo_icon_73d.png") :
-            weather-code == 73 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_73n.png") :
-            weather-code == 75 && is-day ? @image-url("../pict/svg_png/wmo_icon_75d.png") :
-            weather-code == 75 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_75n.png") :
-            weather-code == 77 && is-day ? @image-url("../pict/svg_png/wmo_icon_75d.png") :
-            weather-code == 77 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_75n.png") :
-            weather-code == 80 && is-day ? @image-url("../pict/svg_png/wmo_icon_80d.png") :
-            weather-code == 80 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_80n.png") :
-            weather-code == 81 && is-day ? @image-url("../pict/svg_png/wmo_icon_81d.png") :
-            weather-code == 81 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_81n.png") :
-            weather-code == 82 && is-day ? @image-url("../pict/svg_png/wmo_icon_81d.png") :
-            weather-code == 82 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_81n.png") :
-            weather-code == 84 && is-day ? @image-url("../pict/svg_png/wmo_icon_84d.png") :
-            weather-code == 84 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_84n.png") :
-            weather-code == 85 && is-day ? @image-url("../pict/svg_png/wmo_icon_85d.png") :
-            weather-code == 85 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_85n.png") :
-            weather-code == 86 && is-day ? @image-url("../pict/svg_png/wmo_icon_86d.png") :
-            weather-code == 86 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_86n.png") :
-            weather-code == 95 && is-day ? @image-url("../pict/svg_png/wmo_icon_95d.png") :
-            weather-code == 95 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_95n.png") :
-            weather-code == 96 && is-day ? @image-url("../pict/svg_png/wmo_icon_96d.png") :
-            weather-code == 96 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_96n.png") :
-            weather-code == 99 && is-day ? @image-url("../pict/svg_png/wmo_icon_96d.png") :
-            weather-code == 99 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_96n.png") :
-            @image-url("../pict/svg_png/wmo_icon_03d.png");
+        x: 0;
+        y: 80px;
+        source: weather-code == 0 && is-day ? @image-url("../pict/svg_png/wmo_icon_00d.png") : weather-code == 0 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_00n.png") : weather-code == 1 && is-day ? @image-url("../pict/svg_png/wmo_icon_01d.png") : weather-code == 1 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_01n.png") : weather-code == 2 && is-day ? @image-url("../pict/svg_png/wmo_icon_02d.png") : weather-code == 2 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_02n.png") : weather-code == 3 && is-day ? @image-url("../pict/svg_png/wmo_icon_03d.png") : weather-code == 3 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_03n.png") : weather-code == 45 && is-day ? @image-url("../pict/svg_png/wmo_icon_45d.png") : weather-code == 45 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_45n.png") : weather-code == 48 && is-day ? @image-url("../pict/svg_png/wmo_icon_45d.png") : weather-code == 48 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_45n.png") : weather-code == 51 && is-day ? @image-url("../pict/svg_png/wmo_icon_53d.png") : weather-code == 51 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_53n.png") : weather-code == 53 && is-day ? @image-url("../pict/svg_png/wmo_icon_53d.png") : weather-code == 53 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_53n.png") : weather-code == 55 && is-day ? @image-url("../pict/svg_png/wmo_icon_53d.png") : weather-code == 55 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_53n.png") : weather-code == 56 && is-day ? @image-url("../pict/svg_png/wmo_icon_57d.png") : weather-code == 56 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_57n.png") : weather-code == 57 && is-day ? @image-url("../pict/svg_png/wmo_icon_57d.png") : weather-code == 57 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_57n.png") : weather-code == 61 && is-day ? @image-url("../pict/svg_png/wmo_icon_61d.png") : weather-code == 61 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_61n.png") : weather-code == 63 && is-day ? @image-url("../pict/svg_png/wmo_icon_63d.png") : weather-code == 63 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_63n.png") : weather-code == 65 && is-day ? @image-url("../pict/svg_png/wmo_icon_65d.png") : weather-code == 65 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_65n.png") : weather-code == 66 && is-day ? @image-url("../pict/svg_png/wmo_icon_66d.png") : weather-code == 66 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_66n.png") : weather-code == 67 && is-day ? @image-url("../pict/svg_png/wmo_icon_67d.png") : weather-code == 67 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_67n.png") : weather-code == 71 && is-day ? @image-url("../pict/svg_png/wmo_icon_71d.png") : weather-code == 71 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_71n.png") : weather-code == 73 && is-day ? @image-url("../pict/svg_png/wmo_icon_73d.png") : weather-code == 73 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_73n.png") : weather-code == 75 && is-day ? @image-url("../pict/svg_png/wmo_icon_75d.png") : weather-code == 75 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_75n.png") : weather-code == 77 && is-day ? @image-url("../pict/svg_png/wmo_icon_75d.png") : weather-code == 77 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_75n.png") : weather-code == 80 && is-day ? @image-url("../pict/svg_png/wmo_icon_80d.png") : weather-code == 80 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_80n.png") : weather-code == 81 && is-day ? @image-url("../pict/svg_png/wmo_icon_81d.png") : weather-code == 81 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_81n.png") : weather-code == 82 && is-day ? @image-url("../pict/svg_png/wmo_icon_81d.png") : weather-code == 82 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_81n.png") : weather-code == 84 && is-day ? @image-url("../pict/svg_png/wmo_icon_84d.png") : weather-code == 84 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_84n.png") : weather-code == 85 && is-day ? @image-url("../pict/svg_png/wmo_icon_85d.png") : weather-code == 85 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_85n.png") : weather-code == 86 && is-day ? @image-url("../pict/svg_png/wmo_icon_86d.png") : weather-code == 86 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_86n.png") : weather-code == 95 && is-day ? @image-url("../pict/svg_png/wmo_icon_95d.png") : weather-code == 95 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_95n.png") : weather-code == 96 && is-day ? @image-url("../pict/svg_png/wmo_icon_96d.png") : weather-code == 96 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_96n.png") : weather-code == 99 && is-day ? @image-url("../pict/svg_png/wmo_icon_96d.png") : weather-code == 99 && ! is-day ? @image-url("../pict/svg_png/wmo_icon_96n.png") : @image-url("../pict/svg_png/wmo_icon_03d.png");
     }
 
     Text {
-        x: 4px; y: 165px;
+        x: 4px;
+        y: 165px;
         text: outdoor-text;
         color: white;
         font-size: 14px;
     }
+
     Text {
-        x: 4px; y: 183px;
+        x: 4px;
+        y: 183px;
         text: wind-text;
         color: white;
         font-size: 14px;
     }
+
     Text {
-        x: 4px; y: 201px;
+        x: 4px;
+        y: 201px;
         text: pressure-text;
         color: white;
         font-size: 14px;
     }
+
     Text {
-        x: 4px; y: 219px;
+        x: 4px;
+        y: 219px;
         text: indoor-text;
         color: white;
         font-size: 14px;
     }
+
     Text {
-        x: 4px; y: 237px;
+        x: 4px;
+        y: 237px;
         text: ruuvi-text;
         color: white;
         font-size: 14px;
     }
+
+    HorizontalLayout {
+        x: 4px;
+        y: 255px;
+        alignment: start;
+        Text {
+            text: "CO";
+            color: white;
+            font-size: 14px;
+        }
+
+        Text {
+            y: 8px;
+            color: white;
+            font-size: 12px;
+            text: "2";
+        }
+
+        Text {
+            text: ": \{adafruit-text}";
+            color: white;
+            font-size: 14px;
+        }
+    }
+
     Text {
-        x: 4px; y: 255px;
+        x: 4px;
+        y: 273px;
         text: status-text;
         color: white;
         font-size: 14px;

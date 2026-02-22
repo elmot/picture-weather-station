@@ -32,4 +32,22 @@ menu "Picture Weather Station"
         help
             Longitude coordinate for weather station location (decimal degrees, e.g. "24.9384").
 
+    config PWS_ADAFRUIT_IO_USER
+        string "Adafruit IO username"
+        default ""
+        help
+            Adafruit IO account username.
+
+    config PWS_ADAFRUIT_IO_KEY
+        string "Adafruit IO key"
+        default ""
+        help
+            Adafruit IO active key (from io.adafruit.com settings).
+
+    config PWS_ADAFRUIT_IO_FEED_KEY
+        string "Adafruit IO feed key"
+        default ""
+        help
+            Key of the Adafruit IO feed to read (e.g. "outdoor-temp").
+
 endmenu

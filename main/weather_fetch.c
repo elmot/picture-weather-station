@@ -26,6 +26,7 @@ volatile meteo_data_t g_meteo = { // NOLINT(*-interfaces-global-init)
     .wind_speed = NAN, .wind_gusts = NAN, .wind_dir = "",
     .pressure = NAN, .code = -1, .is_day = true, .last_update = 0,
 };
+volatile adafruit_data_t g_adafruit = { .value = NAN, .last_update = 0 };
 
 #define FETCH_INTERVAL_MS (15 * 60 * 1000) /* 15 min */
 #define MAX_RESPONSE_SIZE  4096
@@ -135,6 +136,60 @@ static void weather_fetch_and_parse(void)
     cJSON_Delete(root);
 }
 
+/*-----------------------------------------------------------------------
+ * Fetch latest value from Adafruit IO feed
+ *---------------------------------------------------------------------*/
+#define AIO_URL "https://io.adafruit.com/api/v2/" CONFIG_PWS_ADAFRUIT_IO_USER \
+    "/feeds/" CONFIG_PWS_ADAFRUIT_IO_FEED_KEY "/data/last"
+
+static void adafruit_fetch(void)
+{
+    static char buf[1024];
+    http_buf_t resp = {.buf = buf, .len = 0, .cap = sizeof(buf)};
+
+    esp_http_client_config_t config = {
+        .url = AIO_URL,
+        .event_handler = http_event_handler,
+        .user_data = &resp,
+        .timeout_ms = 10000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
+
+    esp_err_t err = esp_http_client_perform(client);
+    int status = esp_http_client_get_status_code(client);
+    esp_http_client_cleanup(client);
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Adafruit IO request failed: %s", esp_err_to_name(err));
+        return;
+    }
+    if (status != 200)
+    {
+        ESP_LOGW(TAG, "Adafruit IO HTTP status %d", status);
+        return;
+    }
+
+    cJSON* root = cJSON_Parse(resp.buf);
+    if (!root)
+    {
+        ESP_LOGE(TAG, "Adafruit IO JSON parse error");
+        return;
+    }
+
+    const char* value_str = cJSON_GetStringValue(cJSON_GetObjectItem(root, "value"));
+    if (value_str)
+    {
+        g_adafruit.value = strtof(value_str, nullptr);
+        g_adafruit.last_update = xTaskGetTickCount();
+        ESP_LOGI(TAG, "Adafruit IO: %s = %.2f", CONFIG_PWS_ADAFRUIT_IO_FEED_KEY, g_adafruit.value);
+    }
+
+    cJSON_Delete(root);
+}
+
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num;
 
@@ -206,6 +261,7 @@ _Noreturn void wifi_task(void* arg)
     for (;;)
     {
         weather_fetch_and_parse();
+        adafruit_fetch();
         vTaskDelay(pdMS_TO_TICKS(FETCH_INTERVAL_MS));
     }
 }

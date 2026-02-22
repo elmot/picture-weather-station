@@ -49,6 +49,16 @@ typedef struct {
 
 extern volatile aht20_data_t g_aht20;
 
+/*-----------------------------------------------------------------------
+ * Adafruit IO feed
+ *---------------------------------------------------------------------*/
+typedef struct {
+    float value;
+    TickType_t last_update;
+} adafruit_data_t;
+
+extern volatile adafruit_data_t g_adafruit;
+
 #ifdef __cplusplus
 }
 #endif

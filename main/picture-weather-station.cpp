@@ -98,6 +98,13 @@ extern "C" void app_main(void)
                 ui->set_ruuvi_text(slint::SharedString(buf));
             }
 
+            /* Adafruit IO */
+            if (!std::isnan(g_adafruit.value))
+            {
+                snprintf(buf, sizeof(buf), "%.1f", g_adafruit.value);
+                ui->set_adafruit_text(slint::SharedString(buf));
+            }
+
             /* Data age status line */
             const TickType_t now = xTaskGetTickCount();
             const int web_age_s = g_meteo.last_update
