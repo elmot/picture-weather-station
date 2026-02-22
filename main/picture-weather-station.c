@@ -11,26 +11,7 @@
 #include "driver/i2c_master.h"
 #include "nvs_flash.h"
 #include "lvgl.h"
-extern volatile char* internet_weather_icon_png;
-extern volatile TickType_t internet_weather_last_update;
-extern volatile float internet_weather_temp;
-extern volatile float internet_weather_feels;
-extern volatile float internet_weather_humidity;
-extern volatile float internet_weather_wind_speed;
-extern volatile float internet_weather_wind_gusts;
-extern volatile const char* internet_weather_wind_dir;
-extern volatile float internet_weather_pressure;
-extern volatile float aht20_temperature;
-extern volatile float aht20_humidity;
-
-typedef struct {
-    float temperature;
-    float humidity;
-    float pressure_mmhg;
-    float battery_voltage;
-    uint8_t mac_address[6];
-} ruuvi_data_t;
-extern ruuvi_data_t g_ruuvi_data;
+#include "datastreams.h"
 
 char* shown_icon_ptr = nullptr;
 
@@ -41,6 +22,7 @@ static lv_obj_t* lbl_wind = nullptr;
 static lv_obj_t* lbl_pressure = nullptr;
 static lv_obj_t* lbl_indoor = nullptr;
 static lv_obj_t* lbl_ruuvi = nullptr;
+static lv_obj_t* lbl_status = nullptr;
 static_assert(sizeof(CONFIG_PWS_WIFI_SSID) > 1, "WiFi SSID can not be empty. "
               "Define CONFIG_PWS_WIFI_SSID via `idf.py menuconfig` or in `skdconfig.secrets` file");
 
@@ -109,7 +91,7 @@ static bool on_color_trans_done(esp_lcd_panel_io_handle_t panel_io,
 static void lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area,
                            lv_color_t *color_map)
 {
-    esp_lcd_panel_handle_t panel = (esp_lcd_panel_handle_t)drv->user_data;
+    esp_lcd_panel_handle_t panel = drv->user_data;
     esp_lcd_panel_draw_bitmap(panel, area->x1, area->y1,
                               area->x2 + 1, area->y2 + 1, color_map);
 }
@@ -293,7 +275,7 @@ static lv_img_dsc_t decode_png_to_lvgl(const uint8_t *data)
     /* Allocate full pixel buffer (prefer PSRAM) */
     lv_color_t *pixels = heap_caps_malloc(w * h * sizeof(lv_color_t),
                                           MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!pixels) pixels = malloc(w * h * sizeof(lv_color_t));
+    if (!pixels) pixels = malloc(w * h * sizeof(lv_color_t)); //todo fix memory leak
     assert(pixels);
 
     png_bytep row_rgb = malloc(png_get_rowbytes(png, info));
@@ -400,6 +382,11 @@ _Noreturn void app_main(void)
     lv_obj_set_pos(lbl_ruuvi, LABEL_X, LABEL_Y_START + LABEL_SPACING * 4);
     lv_label_set_text(lbl_ruuvi, "");
 
+    lbl_status = lv_label_create(lv_scr_act());
+    lv_obj_add_style(lbl_status, &style_lbl, 0);
+    lv_obj_set_pos(lbl_status, LABEL_X, LABEL_Y_START + LABEL_SPACING * 5);
+    lv_label_set_text(lbl_status, "");
+
     lvgl_render();
 
     ESP_LOGI(TAG, "Done");
@@ -409,10 +396,10 @@ _Noreturn void app_main(void)
         bool need_render = false;
 
         /* Check if internet weather icon is available and not yet displayed */
-        if (internet_weather_icon_png != nullptr && shown_icon_ptr != internet_weather_icon_png)
+        if (g_meteo.icon_png != nullptr && shown_icon_ptr != g_meteo.icon_png)
         {
-            shown_icon_ptr = (void*)internet_weather_icon_png;
-            const uint8_t* icon_start = (const uint8_t*)internet_weather_icon_png;
+            shown_icon_ptr = g_meteo.icon_png;
+            const uint8_t* icon_start = (const uint8_t*)g_meteo.icon_png;
             lv_img_dsc_t internet_weather_icon_img = decode_png_to_lvgl(icon_start);
             internet_weather_icon_pixels = (lv_color_t*)internet_weather_icon_img.data;
             internet_weather_icon_obj = lv_img_create(lv_scr_act());
@@ -423,29 +410,45 @@ _Noreturn void app_main(void)
         }
 
         /* Update weather labels */
-        if (!isnan(internet_weather_temp)) {
+        if (!isnan(g_meteo.temp)) {
             lv_label_set_text_fmt(lbl_outdoor, "%.1f\xc2\xb0""C (feels %.1f\xc2\xb0""C) %.0f%%",
-                internet_weather_temp, internet_weather_feels, internet_weather_humidity);
+                g_meteo.temp, g_meteo.feels, g_meteo.humidity);
             need_render = true;
         }
-        if (!isnan(internet_weather_wind_speed)) {
+        if (!isnan(g_meteo.wind_speed)) {
             lv_label_set_text_fmt(lbl_wind, "Wind: %s %.1f (%.1f) m/s",
-                internet_weather_wind_dir, internet_weather_wind_speed, internet_weather_wind_gusts);
+                g_meteo.wind_dir, g_meteo.wind_speed, g_meteo.wind_gusts);
             need_render = true;
         }
-        if (!isnan(internet_weather_pressure)) {
+        if (!isnan(g_meteo.pressure)) {
             lv_label_set_text_fmt(lbl_pressure, "Pressure: %.0f hPa",
-                internet_weather_pressure);
+                g_meteo.pressure);
             need_render = true;
         }
-        if (!isnan(aht20_temperature)) {
+        if (!isnan(g_aht20.temperature)) {
             lv_label_set_text_fmt(lbl_indoor, "Indoor: %.1f\xc2\xb0""C  %.0f%%",
-                aht20_temperature, aht20_humidity);
+                g_aht20.temperature, g_aht20.humidity);
             need_render = true;
         }
-        if (g_ruuvi_data.temperature != 0 || g_ruuvi_data.humidity != 0) {
-            lv_label_set_text_fmt(lbl_ruuvi, "Ruuvi: %.1f\xc2\xb0""C %.0f%% %.0fmm",
-                g_ruuvi_data.temperature, g_ruuvi_data.humidity, g_ruuvi_data.pressure_mmhg);
+        if (ruuvi_last_update != 0) {
+            lv_label_set_text_fmt(lbl_ruuvi, "Ruuvi: %.1f\xc2\xb0""C %.0f%% %.0fmm %.2fV",
+                g_ruuvi_data.temperature, g_ruuvi_data.humidity,
+                g_ruuvi_data.pressure_mmhg, g_ruuvi_data.battery_voltage);
+            need_render = true;
+        }
+
+        /* Data age status line */
+        const TickType_t now = xTaskGetTickCount();
+        const int web_age_s = g_meteo.last_update
+            ? (int)((now - g_meteo.last_update) / configTICK_RATE_HZ)
+            : -1;
+        const int ruuvi_age_s = ruuvi_last_update
+            ? (int)((now - ruuvi_last_update) / configTICK_RATE_HZ)
+            : -1;
+        if (web_age_s >= 0 || ruuvi_age_s >= 0) {
+            char buf[48];
+            snprintf(buf, sizeof(buf), "Last upd: Web %dm, Ruuvi %dm", web_age_s / 60, ruuvi_age_s / 60);
+            lv_label_set_text(lbl_status, buf);
             need_render = true;
         }
 

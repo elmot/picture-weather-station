@@ -1,6 +1,7 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "esp_log.h"
+#include "datastreams.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "host/ble_hs.h"
@@ -21,18 +22,8 @@ static const char *TAG = "ruuvi";
 #pragma GCC diagnostic pop
 #endif
 
-/*-----------------------------------------------------------------------
- * Ruuvi data shared globally
- *---------------------------------------------------------------------*/
-typedef struct {
-    float temperature;      /* C   */
-    float humidity;         /* %RH */
-    float pressure_mmhg;   /* mmHg */
-    float battery_voltage;  /* V   */
-    uint8_t mac_address[6]; /* MAC address */
-} ruuvi_data_t;
-
 ruuvi_data_t g_ruuvi_data;
+volatile TickType_t ruuvi_last_update = 0;
 
 /*-----------------------------------------------------------------------
  * Parse Ruuvi Data Format 5 (RAWv2) — 24-byte payload
@@ -101,6 +92,7 @@ static int ble_gap_event_cb(struct ble_gap_event *event, void *arg)
     ruuvi_data_t parsed;
     if (parse_ruuvi_df5(payload, payload_len, &parsed)) {
         g_ruuvi_data = parsed;
+        ruuvi_last_update = xTaskGetTickCount();
         ESP_LOGI(TAG, "Ruuvi: %.1f C, %.1f %%RH, %.1f mmHg, %.2f V, MAC: %02X:%02X:%02X:%02X:%02X:%02X",
                  parsed.temperature, parsed.humidity,
                  parsed.pressure_mmhg, parsed.battery_voltage,

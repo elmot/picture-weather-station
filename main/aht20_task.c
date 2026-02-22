@@ -4,6 +4,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "driver/i2c_master.h"
+#include "datastreams.h"
 
 static const char *TAG = "sensor-ws";
 
@@ -22,8 +23,7 @@ typedef struct {
     float humidity;      /* %RH */
 } sensor_reading_t;
 
-volatile float aht20_temperature = NAN;
-volatile float aht20_humidity = NAN;
+volatile aht20_data_t g_aht20 = { .temperature = NAN, .humidity = NAN };
 
 static i2c_master_dev_handle_t s_aht20;
 static sensor_reading_t s_readings[AHT20_HISTORY];
@@ -100,8 +100,8 @@ _Noreturn void sensor_task(void *arg)
     for (;;) {
         float t, h;
         if (aht20_read(&t, &h) == ESP_OK) {
-            aht20_temperature = t;
-            aht20_humidity = h;
+            g_aht20.temperature = t;
+            g_aht20.humidity = h;
             s_readings[s_reading_head].temperature = t;
             s_readings[s_reading_head].humidity    = h;
             s_reading_head = (s_reading_head + 1) % AHT20_HISTORY;
