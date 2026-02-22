@@ -5,3 +5,4 @@ sdkconfig.old
 sdkconfig.secrets
 managed_components
 mpy.bin
+.claude
