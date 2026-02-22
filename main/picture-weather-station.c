@@ -10,11 +10,14 @@
 #include "driver/i2c_master.h"
 #include "driver/gpio.h"
 #include "nvs_flash.h"
-#include "esp_timer.h"
 #include "lvgl.h"
+extern volatile char* internet_weather_icon_png;
+char* shown_icon_ptr = nullptr;
 
+static lv_obj_t* internet_weather_icon_obj = nullptr;
+static lv_color_t* internet_weather_icon_pixels = nullptr;
 static_assert(sizeof(CONFIG_PWS_WIFI_SSID) > 1, "WiFi SSID can not be empty. "
-    "Define CONFIG_PWS_WIFI_SSID via `idf.py menuconfig` or in `skdconfig.secrets` file");
+              "Define CONFIG_PWS_WIFI_SSID via `idf.py menuconfig` or in `skdconfig.secrets` file");
 
 static_assert(sizeof(CONFIG_PWS_WIFI_PASSWORD) > 1, "WiFi password can not be empty. "
     "Define CONFIG_PWS_WIFI_PASSWORD via `idf.py menuconfig` or in `skdconfig.secrets` file");
@@ -59,8 +62,8 @@ static esp_lcd_panel_handle_t s_panel;
 /*-----------------------------------------------------------------------
  * PNG image embedded in flash (see EMBED_FILES in CMakeLists.txt)
  *---------------------------------------------------------------------*/
-extern const uint8_t png_start[] asm("_binary_wind_fox_a_png_start");
-extern const uint8_t png_end[]   asm("_binary_wind_fox_a_png_end");
+extern const uint8_t _binary_wind_fox_a_png_start; // NOLINT(*-reserved-identifier)
+
 
 /*-----------------------------------------------------------------------
  * SPI transfer-done callback — signals LVGL that the buffer is free
@@ -87,15 +90,7 @@ static void lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area,
 }
 
 /*-----------------------------------------------------------------------
- * LVGL tick callback (called every 2 ms from esp_timer)
- *---------------------------------------------------------------------*/
-static void lvgl_tick_cb(void *arg)
-{
-    lv_tick_inc(2);
-}
-
-/*-----------------------------------------------------------------------
- * Initialise LVGL: draw buffer, display driver, tick source
+ * Initialise LVGL: draw buffer, display driver (no tick timer)
  *---------------------------------------------------------------------*/
 static void lvgl_init(void)
 {
@@ -117,15 +112,16 @@ static void lvgl_init(void)
     s_disp_drv = &disp_drv;
     lv_disp_drv_register(&disp_drv);
 
-    const esp_timer_create_args_t tick_args = {
-        .callback = lvgl_tick_cb,
-        .name = "lvgl_tick",
-    };
-    esp_timer_handle_t tick_timer;
-    ESP_ERROR_CHECK(esp_timer_create(&tick_args, &tick_timer));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(tick_timer, 2000));
-
     ESP_LOGI(TAG, "LVGL initialised");
+}
+
+/*-----------------------------------------------------------------------
+ * Force LVGL to render all pending changes to the display
+ *---------------------------------------------------------------------*/
+void lvgl_render(void)
+{
+    lv_tick_inc(100);
+    lv_refr_now(NULL);
 }
 
 /*-----------------------------------------------------------------------
@@ -169,7 +165,7 @@ static void lcd_init(void)
     ESP_ERROR_CHECK(esp_lcd_panel_init(s_panel));
 
     /* dir=2 in MicroPython -> 180 deg rotation -> mirror both axes */
-    ESP_ERROR_CHECK(esp_lcd_panel_mirror(s_panel, false, true));
+    ESP_ERROR_CHECK(esp_lcd_panel_mirror(s_panel, true, true));
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(s_panel, true));
 
     ESP_LOGI(TAG, "LCD initialised (%dx%d)", LCD_H_RES, LCD_V_RES);
@@ -236,7 +232,7 @@ static void png_mem_read_fn(png_structp png, png_bytep out, size_t count)
  * The pixel buffer is allocated on PSRAM and must stay alive while the
  * image is displayed by LVGL.
  *---------------------------------------------------------------------*/
-static lv_img_dsc_t decode_png_to_lvgl(const uint8_t *data, size_t size)
+static lv_img_dsc_t decode_png_to_lvgl(const uint8_t *data)
 {
     png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING,
                                             nullptr, nullptr, nullptr);
@@ -248,10 +244,10 @@ static lv_img_dsc_t decode_png_to_lvgl(const uint8_t *data, size_t size)
     png_set_read_fn(png, &state, png_mem_read_fn);
     png_read_info(png, info);
 
-    int w = png_get_image_width(png, info);
-    int h = png_get_image_height(png, info);
-    png_byte color_type = png_get_color_type(png, info);
-    png_byte bit_depth  = png_get_bit_depth(png, info);
+    const unsigned int w = png_get_image_width(png, info);
+    const unsigned int h = png_get_image_height(png, info);
+    const png_byte color_type = png_get_color_type(png, info);
+    const png_byte bit_depth  = png_get_bit_depth(png, info);
 
     ESP_LOGI(TAG, "PNG: %dx%d, color_type=%d, bit_depth=%d", w, h,
              color_type, bit_depth);
@@ -339,15 +335,31 @@ _Noreturn void app_main(void)
 
     /* Decode and display the embedded PNG */
     static lv_img_dsc_t fox_img;
-    fox_img = decode_png_to_lvgl(png_start, png_end - png_start);
+    fox_img = decode_png_to_lvgl(&_binary_wind_fox_a_png_start);
     lv_obj_t *img = lv_img_create(lv_scr_act());
     lv_img_set_src(img, &fox_img);
     lv_obj_align(img, LV_ALIGN_TOP_LEFT, 0, 0);
 
-    ESP_LOGI(TAG, "UI ready -- entering LVGL loop");
+    lvgl_render();
+
+    ESP_LOGI(TAG, "Done");
 
     for (;;) {
-        lv_timer_handler();
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        /* Check if internet weather icon is available and not yet displayed */
+        if (internet_weather_icon_png != nullptr && shown_icon_ptr != internet_weather_icon_png)
+        {
+            shown_icon_ptr = (void*)internet_weather_icon_png;
+            const uint8_t* icon_start = (const uint8_t*)internet_weather_icon_png;
+            lv_img_dsc_t internet_weather_icon_img = decode_png_to_lvgl(icon_start);
+            internet_weather_icon_pixels = (lv_color_t*)internet_weather_icon_img.data;
+            internet_weather_icon_obj = lv_img_create(lv_scr_act());
+            lv_img_set_src(internet_weather_icon_obj, &internet_weather_icon_img);
+            lv_obj_align(internet_weather_icon_obj, LV_ALIGN_TOP_RIGHT, 0, 0);
+            lvgl_render();
+            
+            ESP_LOGI(TAG, "Internet weather icon displayed");
+        }
     }
 }
