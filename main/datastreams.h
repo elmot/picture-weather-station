@@ -16,10 +16,10 @@ typedef struct {
     float pressure_mmhg;   /* mmHg */
     float battery_voltage;  /* V   */
     uint8_t mac_address[6]; /* MAC address */
+    TickType_t last_update;
 } ruuvi_data_t;
 
-extern ruuvi_data_t g_ruuvi_data;
-extern volatile TickType_t ruuvi_last_update;
+extern volatile ruuvi_data_t g_ruuvi_data;
 
 /*-----------------------------------------------------------------------
  * Internet weather (open-meteo)

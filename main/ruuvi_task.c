@@ -7,7 +7,7 @@
 #include "host/ble_hs.h"
 #include "host/ble_gap.h"
 
-static const char *TAG = "ruuvi";
+static const char* TAG = "ruuvi";
 
 #define RUUVI_COMPANY_ID  0x0499
 #define RUUVI_FORMAT      5
@@ -22,8 +22,7 @@ static const char *TAG = "ruuvi";
 #pragma GCC diagnostic pop
 #endif
 
-ruuvi_data_t g_ruuvi_data;
-volatile TickType_t ruuvi_last_update = 0;
+volatile ruuvi_data_t g_ruuvi_data;
 
 /*-----------------------------------------------------------------------
  * Parse Ruuvi Data Format 5 (RAWv2) — 24-byte payload
@@ -31,7 +30,7 @@ volatile TickType_t ruuvi_last_update = 0;
  *   format(1) temp(2) hum(2) press(2) ax(2) ay(2) az(2)
  *   power(2) movement(1) seq(2) mac(6)
  *---------------------------------------------------------------------*/
-static bool parse_ruuvi_df5(const uint8_t *data, size_t len, ruuvi_data_t *out)
+static bool parse_ruuvi_df5(const uint8_t* data, size_t len, ruuvi_data_t* out)
 {
     if (len != 24) return false;
     if (data[0] != RUUVI_FORMAT) return false;
@@ -58,24 +57,25 @@ static bool parse_ruuvi_df5(const uint8_t *data, size_t len, ruuvi_data_t *out)
     if (battery_bits == 0x7FF) return false;
     out->battery_voltage = (battery_bits + 1600) / 1000.0f;
 
-/* MAC address: bytes 18-23 */
+    /* MAC address: bytes 18-23 */
     memcpy(out->mac_address, &data[18], 6);
-
+    out->last_update = xTaskGetTickCount();
     return true;
 }
 
 /*-----------------------------------------------------------------------
  * NimBLE GAP scan callback
  *---------------------------------------------------------------------*/
-static int ble_gap_event_cb(struct ble_gap_event *event, void *arg)
+static int ble_gap_event_cb(struct ble_gap_event* event, void* arg)
 {
     if (event->type != BLE_GAP_EVENT_DISC) return 0;
 
-    struct ble_gap_disc_desc *desc = &event->disc;
+    struct ble_gap_disc_desc* desc = &event->disc;
 
     /* Filter by BLE local name matching configured 4-hex-digit Ruuvi tag name */
     static struct ble_hs_adv_fields fields;
-    if (ble_hs_adv_parse_fields(&fields, desc->data, desc->length_data) != 0) {
+    if (ble_hs_adv_parse_fields(&fields, desc->data, desc->length_data) != 0)
+    {
         return 0;
     }
 
@@ -86,13 +86,13 @@ static int ble_gap_event_cb(struct ble_gap_event *event, void *arg)
     if (company_id != RUUVI_COMPANY_ID) return 0;
 
     /* Remaining bytes are the Ruuvi payload */
-    const uint8_t *payload = fields.mfg_data + 2;
+    const uint8_t* payload = fields.mfg_data + 2;
     size_t payload_len = fields.mfg_data_len - 2;
 
     ruuvi_data_t parsed;
-    if (parse_ruuvi_df5(payload, payload_len, &parsed)) {
+    if (parse_ruuvi_df5(payload, payload_len, &parsed))
+    {
         g_ruuvi_data = parsed;
-        ruuvi_last_update = xTaskGetTickCount();
         ESP_LOGI(TAG, "Ruuvi: %.1f C, %.1f %%RH, %.1f mmHg, %.2f V, MAC: %02X:%02X:%02X:%02X:%02X:%02X",
                  parsed.temperature, parsed.humidity,
                  parsed.pressure_mmhg, parsed.battery_voltage,
@@ -112,14 +112,15 @@ static void ble_on_sync(void)
     ESP_LOGI(TAG, "BLE host synced, starting active scan");
 
     struct ble_gap_disc_params scan_params = {
-        .passive = 0,          /* active scan to get scan responses with name */
-        .itvl = 0,             /* use defaults */
+        .passive = 0, /* active scan to get scan responses with name */
+        .itvl = 0, /* use defaults */
         .window = 0,
         .filter_duplicates = 0,
     };
     int rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER,
                           &scan_params, ble_gap_event_cb, NULL);
-    if (rc != 0) {
+    if (rc != 0)
+    {
         ESP_LOGE(TAG, "Failed to start scan: %d", rc);
     }
 }
@@ -127,9 +128,9 @@ static void ble_on_sync(void)
 /*-----------------------------------------------------------------------
  * NimBLE host task (runs in its own FreeRTOS task)
  *---------------------------------------------------------------------*/
-static void nimble_host_task(void *param)
+static void nimble_host_task(void* param)
 {
-    nimble_port_run();          /* blocks until nimble_port_stop() */
+    nimble_port_run(); /* blocks until nimble_port_stop() */
     nimble_port_freertos_deinit();
 }
 
@@ -139,7 +140,8 @@ static void nimble_host_task(void *param)
 void ruuvi_task_init(void)
 {
     esp_err_t ret = nimble_port_init();
-    if (ret != ESP_OK) {
+    if (ret != ESP_OK)
+    {
         ESP_LOGE(TAG, "nimble_port_init failed: %s", esp_err_to_name(ret));
         return;
     }
