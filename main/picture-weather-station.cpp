@@ -4,10 +4,11 @@
 #include "esp_log.h"
 #include "esp_lcd_panel_io.h"
 #include "nvs_flash.h"
-#include "slint-esp.h"
 #include "weather-station.h"
 #include "datastreams.h"
 #include "hw_support.h"
+#include "chart.h"
+#include "fox_condition.h"
 
 extern "C" {
 void sensor_task(void*);
@@ -16,7 +17,6 @@ void wifi_task(void*);
 }
 
 static const char* TAG = "picture-ws";
-
 bool isDataExpired(const TickType_t last_update)
 {
     const auto now = xTaskGetTickCount();
@@ -53,58 +53,16 @@ extern "C" void app_main(void)
     xTaskCreate(sensor_task, "sensor", 4096, nullptr, 5, nullptr);
 
     auto ui = WeatherStation::create();
+    ChartSupportCode<WeatherStation, ChartSupport>(ui).setup();
 
     /* Periodic timer: poll volatile globals and push data into Slint properties */
     slint::Timer timer(std::chrono::milliseconds(1000),
                        [&ui]()
                        {
                            /* Weather icon (code + day/night handled by Slint conditionals) */
-                           ui->set_weather_code((int)g_meteo.code);
+                           ui->set_weather_code(static_cast<int>(g_meteo.code));
                            ui->set_day(static_cast<bool>(g_meteo.is_day));
                            /* Fox */
-                           FoxConditionEnum fox_condition;
-                           switch (g_meteo.code)
-                           {
-                           case WMO_CLEAR_SKY:
-                           case WMO_MAINLY_CLEAR:
-                           case WMO_PARTLY_CLOUDY:
-                           case WMO_OVERCAST:
-                           case WMO_FOG:
-                           case WMO_RIME_FOG:
-                               fox_condition = FoxConditionEnum::Sun;
-                               break;
-                           case WMO_DRIZZLE_LIGHT:
-                           case WMO_DRIZZLE_MODERATE:
-                           case WMO_DRIZZLE_DENSE:
-                           case WMO_FREEZING_DRIZZLE_LIGHT:
-                           case WMO_FREEZING_DRIZZLE_DENSE:
-                           case WMO_RAIN_SLIGHT:
-                           case WMO_RAIN_MODERATE:
-                           case WMO_RAIN_HEAVY:
-                           case WMO_FREEZING_RAIN_LIGHT:
-                           case WMO_FREEZING_RAIN_HEAVY:
-                           case WMO_RAIN_SHOWERS_SLIGHT:
-                           case WMO_RAIN_SHOWERS_MODERATE:
-                           case WMO_RAIN_SHOWERS_VIOLENT:
-                           case WMO_THUNDERSTORM:
-                               fox_condition = FoxConditionEnum::Rain;
-                               break;
-                           case WMO_SNOW_SLIGHT:
-                           case WMO_SNOW_MODERATE:
-                           case WMO_SNOW_HEAVY:
-                           case WMO_SNOW_GRAINS:
-                           case WMO_SNOW_SHOWERS_SLIGHT:
-                           case WMO_SNOW_SHOWERS_HEAVY:
-                           case WMO_THUNDERSTORM_HAIL_SLIGHT:
-                           case WMO_THUNDERSTORM_HAIL_HEAVY:
-                               fox_condition = FoxConditionEnum::Snow;
-                               break;
-                           default:
-                               fox_condition = FoxConditionEnum::Sun;
-
-                               break;
-                           }
-
                            /* Fetched meteo data */
                            const auto meteoData = OpenMeteoData{
                                .tempC = g_meteo.temp,
@@ -112,15 +70,23 @@ extern "C" void app_main(void)
                                .windSpeed = g_meteo.wind_speed,
                                .windGusts = g_meteo.wind_gusts,
                                .windDir = g_meteo.wind_dir,
-                               .condition = fox_condition,
+                               .condition = fox_condition(g_meteo.code),
                                .connFail = isDataExpired(g_meteo.last_update)
                            };
                            ui->set_meteo_data(meteoData);
 
                            /* Indoor sensor */
+                           const auto tempHistory = std::make_shared<slint::VectorModel<float>>();
+                           for (size_t i = 0; i < g_aht20_history.count; i++)
+                           {
+                               const size_t idx = (g_aht20_history.head + AHT20_HISTORY - 1 - i) % AHT20_HISTORY;
+                               tempHistory->push_back(static_cast<float>(g_aht20_history.readings[idx].temperature));
+                           }
+
                            ui->set_indoor_data(LocalData{
                                .tempC = g_aht20_history.last_reading->temperature,
                                .relHumidity = g_aht20_history.last_reading->humidity,
+                               .tempHistory = tempHistory,
                            });
 
                            /* Ruuvi tag */

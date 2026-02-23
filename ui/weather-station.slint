@@ -1,7 +1,8 @@
 import { HorizontalBox } from "std-widgets.slint";
 import { DataWidget } from "./data-widget.slint";
 import { WeatherIcon } from "./weather-icon.slint";
-
+import { Chart, ChartSupport } from "./chart.slint";
+export { ChartSupport }
 export enum FoxConditionEnum { wind, rain, snow, sun }
 
 export struct RuuviData {
@@ -28,6 +29,7 @@ export struct AdaIoData {
 export struct LocalData {
     tempC: float,
     relHumidity: float,
+    tempHistory: [float]
 }
 
 export component WeatherStation inherits Window {
@@ -93,9 +95,7 @@ export component WeatherStation inherits Window {
                 }
 
                 Text {
-                    color: roovi-data.battV > 2.7 ? white
-                    	:  roovi-data.battV > 2.5 ?  yellow
-                    	: darkred;
+                    color: roovi-data.battV > 2.7 ? white : roovi-data.battV > 2.5 ? yellow : darkred;
                     font-size: 14px;
                     text: "Bat: \{roovi-data.battV.to-fixed(1)}V";
                 }
@@ -174,10 +174,7 @@ export component WeatherStation inherits Window {
     Image {
         x: parent.width - self.width;
         y: 0;
-        source: meteo-data.condition == FoxConditionEnum.wind ? @image-url("../pict/fox_wind.png")
-           : meteo-data.condition == FoxConditionEnum.snow ? @image-url("../pict/fox_snow.png")
-           : meteo-data.condition == FoxConditionEnum.rain ? @image-url("../pict/fox_rain.png")
-           : @image-url("../pict/fox_sun.png");
+        source: meteo-data.condition == FoxConditionEnum.wind ? @image-url("../pict/fox_wind.png") : meteo-data.condition == FoxConditionEnum.snow ? @image-url("../pict/fox_snow.png") : meteo-data.condition == FoxConditionEnum.rain ? @image-url("../pict/fox_rain.png") : @image-url("../pict/fox_sun.png");
     }
 
     WeatherIcon {
@@ -214,5 +211,13 @@ export component WeatherStation inherits Window {
                 font-size: 14px;
             }
         }
+    }
+    Chart {
+    	x:100px;
+    	y:100px;
+    	width: 140px;
+    	height: 100px;
+    	background: blue;
+    	data: indoor-data.tempHistory;
     }
 }

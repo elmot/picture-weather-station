@@ -1,0 +1,19 @@
+export global ChartSupport {
+    pure callback renderChart(w: int, h: int, data: [float], lineColor: color, gridColor: color, gridRowNumber: int, gridColNumber: int) -> image;
+}
+
+export component Chart inherits Rectangle {
+    in property <[float]> data;
+    in property <color> lineColor: white;
+    in property <color> gridColor: self.lineColor.with-alpha(0.5);
+    in property <int> gridRows: 3;
+    in property <int> gridCols: 5;
+    //to be chart area
+    Image {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: parent.height;
+        source: ChartSupport.renderChart(parent.width / 1px, parent.height / 1px, data, lineColor, gridColor, gridRows, gridCols);
+    }
+}
