@@ -42,6 +42,29 @@ extern "C" void pushAht20Data(float temperature, float humidity)
 }
 
 /*-----------------------------------------------------------------------
+ * Ruuvi history (sampled every 15 min)
+ *---------------------------------------------------------------------*/
+SensorHistory<ruuvi_data_t, 96> g_ruuvi_history{};
+
+extern "C" void recordRuuviData(void)
+{
+    ruuvi_data_t snapshot{};
+    if (isDataExpired(g_ruuvi_data.last_update))
+    {
+        snapshot.temperature = -1000;
+        snapshot.pressure_mmhg = -1000;
+        snapshot.humidity = -1000;
+    }
+    else
+    {
+        snapshot.temperature = g_ruuvi_data.temperature;
+        snapshot.pressure_mmhg = g_ruuvi_data.pressure_mmhg;
+        snapshot.humidity = g_ruuvi_data.humidity;
+    }
+    g_ruuvi_history.push(snapshot);
+}
+
+/*-----------------------------------------------------------------------
  * app_main
  *---------------------------------------------------------------------*/
 extern "C" void app_main(void)

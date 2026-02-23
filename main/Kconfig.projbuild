@@ -50,4 +50,10 @@ menu "Picture Weather Station"
         help
             Key of the Adafruit IO feed to read (e.g. "outdoor-temp").
 
+    config PWS_ADAFRUIT_IO_PUBLISH_FEED
+        string "Adafruit IO publish feed key (Ruuvi)"
+        default "your-adafruit-feed-tag"
+        help
+            Key of the Adafruit IO feed to publish Ruuvi sensor data to as JSON.
+
 endmenu

@@ -190,6 +190,61 @@ static void adafruit_fetch(void)
     cJSON_Delete(root);
 }
 
+/*-----------------------------------------------------------------------
+ * Publish Ruuvi sensor data as JSON to Adafruit IO feed
+ *---------------------------------------------------------------------*/
+#define AIO_PUBLISH_URL "https://io.adafruit.com/api/v2/" CONFIG_PWS_ADAFRUIT_IO_USER \
+    "/feeds/" CONFIG_PWS_ADAFRUIT_IO_PUBLISH_FEED "/data"
+
+static void adafruit_publish_ruuvi(void)
+{
+    if (g_ruuvi_data.last_update == 0) return;
+
+    cJSON *value_obj = cJSON_CreateObject();
+    cJSON_AddNumberToObject(value_obj, "temperature", g_ruuvi_data.temperature);
+    cJSON_AddNumberToObject(value_obj, "pressure", g_ruuvi_data.pressure_mmhg);
+    cJSON_AddNumberToObject(value_obj, "humidity", g_ruuvi_data.humidity);
+    char *value_str = cJSON_PrintUnformatted(value_obj);
+    cJSON_Delete(value_obj);
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "value", value_str);
+    char *body = cJSON_PrintUnformatted(root);
+    cJSON_free(value_str);
+    cJSON_Delete(root);
+
+    if (!body) return;
+
+    esp_http_client_config_t config = {
+        .url = AIO_PUBLISH_URL,
+        .method = HTTP_METHOD_POST,
+        .timeout_ms = 10000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_post_field(client, body, strlen(body));
+
+    esp_err_t err = esp_http_client_perform(client);
+    int status = esp_http_client_get_status_code(client);
+    esp_http_client_cleanup(client);
+    cJSON_free(body);
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Adafruit IO publish failed: %s", esp_err_to_name(err));
+        return;
+    }
+    if (status != 200 && status != 201)
+    {
+        ESP_LOGW(TAG, "Adafruit IO publish HTTP status %d", status);
+        return;
+    }
+    ESP_LOGI(TAG, "Published Ruuvi data to Adafruit IO feed '%s'",
+             CONFIG_PWS_ADAFRUIT_IO_PUBLISH_FEED);
+}
+
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num;
 
@@ -262,6 +317,7 @@ _Noreturn void wifi_task(void* arg)
     {
         weather_fetch_and_parse();
         adafruit_fetch();
+        adafruit_publish_ruuvi();
         vTaskDelay(pdMS_TO_TICKS(FETCH_INTERVAL_MS));
     }
 }

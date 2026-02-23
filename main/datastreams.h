@@ -45,6 +45,7 @@ extern volatile meteo_data_t g_meteo;
  * AHT20 indoor sensor
  *---------------------------------------------------------------------*/
 void pushAht20Data(float temperature, float humidity);
+void recordRuuviData(void);
 /*-----------------------------------------------------------------------
  * Adafruit IO feed
  *---------------------------------------------------------------------*/
