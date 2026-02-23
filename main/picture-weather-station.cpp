@@ -61,6 +61,49 @@ extern "C" void app_main(void)
                            /* Weather icon (code + day/night handled by Slint conditionals) */
                            ui->set_weather_code((int)g_meteo.code);
                            ui->set_day(static_cast<bool>(g_meteo.is_day));
+                           /* Fox */
+                           FoxConditionEnum fox_condition;
+                           switch (g_meteo.code)
+                           {
+                           case WMO_CLEAR_SKY:
+                           case WMO_MAINLY_CLEAR:
+                           case WMO_PARTLY_CLOUDY:
+                           case WMO_OVERCAST:
+                           case WMO_FOG:
+                           case WMO_RIME_FOG:
+                               fox_condition = FoxConditionEnum::Sun;
+                               break;
+                           case WMO_DRIZZLE_LIGHT:
+                           case WMO_DRIZZLE_MODERATE:
+                           case WMO_DRIZZLE_DENSE:
+                           case WMO_FREEZING_DRIZZLE_LIGHT:
+                           case WMO_FREEZING_DRIZZLE_DENSE:
+                           case WMO_RAIN_SLIGHT:
+                           case WMO_RAIN_MODERATE:
+                           case WMO_RAIN_HEAVY:
+                           case WMO_FREEZING_RAIN_LIGHT:
+                           case WMO_FREEZING_RAIN_HEAVY:
+                           case WMO_RAIN_SHOWERS_SLIGHT:
+                           case WMO_RAIN_SHOWERS_MODERATE:
+                           case WMO_RAIN_SHOWERS_VIOLENT:
+                           case WMO_THUNDERSTORM:
+                               fox_condition = FoxConditionEnum::Rain;
+                               break;
+                           case WMO_SNOW_SLIGHT:
+                           case WMO_SNOW_MODERATE:
+                           case WMO_SNOW_HEAVY:
+                           case WMO_SNOW_GRAINS:
+                           case WMO_SNOW_SHOWERS_SLIGHT:
+                           case WMO_SNOW_SHOWERS_HEAVY:
+                           case WMO_THUNDERSTORM_HAIL_SLIGHT:
+                           case WMO_THUNDERSTORM_HAIL_HEAVY:
+                               fox_condition = FoxConditionEnum::Snow;
+                               break;
+                           default:
+                               fox_condition = FoxConditionEnum::Sun;
+
+                               break;
+                           }
 
                            /* Fetched meteo data */
                            const auto meteoData = OpenMeteoData{
@@ -69,14 +112,15 @@ extern "C" void app_main(void)
                                .windSpeed = g_meteo.wind_speed,
                                .windGusts = g_meteo.wind_gusts,
                                .windDir = g_meteo.wind_dir,
+                               .condition = fox_condition,
                                .connFail = isDataExpired(g_meteo.last_update)
                            };
                            ui->set_meteo_data(meteoData);
 
                            /* Indoor sensor */
                            ui->set_indoor_data(LocalData{
-                               .tempC = g_aht20.temperature,
-                               .relHumidity = g_aht20.humidity
+                               .tempC = g_aht20_history.last_reading->temperature,
+                               .relHumidity = g_aht20_history.last_reading->humidity,
                            });
 
                            /* Ruuvi tag */
@@ -94,50 +138,6 @@ extern "C" void app_main(void)
                                .connFail = isDataExpired(g_adafruit.last_update)
                            });
 
-                           /* Fox */
-                           const char* fox_condition;
-                           switch (g_meteo.code)
-                           {
-                           case WMO_CLEAR_SKY:
-                           case WMO_MAINLY_CLEAR:
-                           case WMO_PARTLY_CLOUDY:
-                           case WMO_OVERCAST:
-                           case WMO_FOG:
-                           case WMO_RIME_FOG:
-                               fox_condition = "sun";
-                               break;
-                           case WMO_DRIZZLE_LIGHT:
-                           case WMO_DRIZZLE_MODERATE:
-                           case WMO_DRIZZLE_DENSE:
-                           case WMO_FREEZING_DRIZZLE_LIGHT:
-                           case WMO_FREEZING_DRIZZLE_DENSE:
-                           case WMO_RAIN_SLIGHT:
-                           case WMO_RAIN_MODERATE:
-                           case WMO_RAIN_HEAVY:
-                           case WMO_FREEZING_RAIN_LIGHT:
-                           case WMO_FREEZING_RAIN_HEAVY:
-                           case WMO_RAIN_SHOWERS_SLIGHT:
-                           case WMO_RAIN_SHOWERS_MODERATE:
-                           case WMO_RAIN_SHOWERS_VIOLENT:
-                           case WMO_THUNDERSTORM:
-                               fox_condition = "rain";
-                               break;
-                           case WMO_SNOW_SLIGHT:
-                           case WMO_SNOW_MODERATE:
-                           case WMO_SNOW_HEAVY:
-                           case WMO_SNOW_GRAINS:
-                           case WMO_SNOW_SHOWERS_SLIGHT:
-                           case WMO_SNOW_SHOWERS_HEAVY:
-                           case WMO_THUNDERSTORM_HAIL_SLIGHT:
-                           case WMO_THUNDERSTORM_HAIL_HEAVY:
-                               fox_condition = "snow";
-                               break;
-                           default:
-                               fox_condition = "sun";
-
-                               break;
-                           }
-                           ui->set_fox_condition(slint::SharedString{fox_condition});
                        });
 
     ESP_LOGI(TAG, "Starting Slint UI");

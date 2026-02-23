@@ -15,19 +15,13 @@ static const char *TAG = "sensor-ws";
 #define AHT20_CMD_INIT   0xBE
 #define AHT20_CMD_MEAS   0xAC
 #define AHT20_INTERVAL   (5 * 1000)      /* 5 sec in ms *///todo set to 15 min
-#define AHT20_HISTORY    96              /* 24 h worth of readings */
 #define I2C_TIMEOUT      100
-typedef struct {
-    float temperature;   /* °C  */
-    float humidity;      /* %RH */
-} sensor_reading_t;
 
-volatile aht20_data_t g_aht20 = { .temperature = NAN, .humidity = NAN };
+volatile g_aht20_history_t g_aht20_history = {
+    .last_reading = g_aht20_history.readings
+};
 
 static i2c_master_dev_handle_t s_aht20;
-static sensor_reading_t s_readings[AHT20_HISTORY];
-static int              s_reading_count;        /* total stored so far */
-static int              s_reading_head;         /* next write index   */
 
 #define I2C_CLK_HZ       (400 * 1000)
 extern i2c_master_bus_handle_t s_i2c_bus;
@@ -99,14 +93,13 @@ _Noreturn void sensor_task(void *arg)
     for (;;) {
         float t, h;
         if (aht20_read(&t, &h) == ESP_OK) {
-            g_aht20.temperature = t;
-            g_aht20.humidity = h;
-            s_readings[s_reading_head].temperature = t;
-            s_readings[s_reading_head].humidity    = h;
-            s_reading_head = (s_reading_head + 1) % AHT20_HISTORY;
-            if (s_reading_count < AHT20_HISTORY) s_reading_count++;
+            g_aht20_history.readings[g_aht20_history.head].temperature = t;
+            g_aht20_history.readings[g_aht20_history.head].humidity    = h;
+            g_aht20_history.last_reading = &g_aht20_history.readings[g_aht20_history.head];
+            g_aht20_history.head = (g_aht20_history.head + 1) % AHT20_HISTORY;
+            if (g_aht20_history.count < AHT20_HISTORY) g_aht20_history.count++;
             ESP_LOGI(TAG, "AHT20: %.1f °C, %.1f %%RH  [%d stored]",
-                     t, h, s_reading_count);
+                     t, h, g_aht20_history.count);
         }
         vTaskDelay(pdMS_TO_TICKS(AHT20_INTERVAL));
     }

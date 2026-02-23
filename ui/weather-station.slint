@@ -2,6 +2,8 @@ import { HorizontalBox } from "std-widgets.slint";
 import { DataWidget } from "./data-widget.slint";
 import { WeatherIcon } from "./weather-icon.slint";
 
+export enum FoxConditionEnum { wind, rain, snow, sun }
+
 export struct RuuviData {
     tempC: float,
     atmPHgmm: float,
@@ -16,6 +18,7 @@ export struct OpenMeteoData {
     windSpeed: float,
     windGusts: float,
     windDir: string,
+    condition: FoxConditionEnum,
     connFail: bool}
 
 export struct AdaIoData {
@@ -28,7 +31,6 @@ export struct LocalData {
 }
 
 export component WeatherStation inherits Window {
-    in property <string> fox-condition: "rain";
     in property <int> weather-code: -1;
     in property <bool> day: true;
     in property <LocalData> indoor-data: { relHumidity:0.0001, tempC:-10.00001 };
@@ -168,12 +170,12 @@ export component WeatherStation inherits Window {
     }
 
     Image {
-        source: fox-condition == "wind" ? @image-url("../pict/fox_wind.png") :
-                fox-condition == "snow" ? @image-url("../pict/fox_snow.png") :
-                fox-condition == "rain" ? @image-url("../pict/fox_rain.png") :
-                @image-url("../pict/fox_sun.png");
         x: parent.width - self.width;
         y: 0;
+        source: meteo-data.condition == FoxConditionEnum.wind ? @image-url("../pict/fox_wind.png")
+           : meteo-data.condition == FoxConditionEnum.snow ? @image-url("../pict/fox_snow.png")
+           : meteo-data.condition == FoxConditionEnum.rain ? @image-url("../pict/fox_rain.png")
+           : @image-url("../pict/fox_sun.png");
     }
 
     WeatherIcon {

@@ -77,13 +77,23 @@ extern volatile meteo_data_t g_meteo;
 /*-----------------------------------------------------------------------
  * AHT20 indoor sensor
  *---------------------------------------------------------------------*/
+
+#define AHT20_HISTORY 96  /* ring buffer size (24 h at 15 min intervals) */
+
 typedef struct {
-    float temperature;    /* °C */
-    float humidity;       /* %RH */
-} aht20_data_t;
+    float temperature;
+    float humidity;
+} aht20_reading_t;
 
-extern volatile aht20_data_t g_aht20;
+typedef struct
+{
+    aht20_reading_t readings [AHT20_HISTORY];
+    int count;
+    int head;
+    volatile aht20_reading_t* last_reading;
+} g_aht20_history_t;
 
+extern volatile g_aht20_history_t g_aht20_history;
 /*-----------------------------------------------------------------------
  * Adafruit IO feed
  *---------------------------------------------------------------------*/
