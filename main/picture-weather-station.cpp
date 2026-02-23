@@ -9,6 +9,7 @@
 #include "hw_support.h"
 #include "chart.h"
 #include "fox_condition.h"
+#include "sensor_history.h"
 
 extern "C" {
 void sensor_task(void*);
@@ -22,6 +23,22 @@ bool isDataExpired(const TickType_t last_update)
     const auto now = xTaskGetTickCount();
     if (last_update == 0) return true;
     return pdTICKS_TO_MS(now - last_update) > (1000 * 60 * 60);
+}
+/*-----------------------------------------------------------------------
+ * AHT20 indoor sensor
+ *---------------------------------------------------------------------*/
+
+typedef struct
+{
+    float temperature;
+    float humidity;
+} aht20_reading_t;
+
+SensorHistory<aht20_reading_t, 96> g_aht20_history{};
+
+extern "C" void pushAht20Data(float temperature, float humidity)
+{
+    g_aht20_history.push({temperature, humidity});
 }
 
 /*-----------------------------------------------------------------------
@@ -76,16 +93,11 @@ extern "C" void app_main(void)
                            ui->set_meteo_data(meteoData);
 
                            /* Indoor sensor */
-                           const auto tempHistory = std::make_shared<slint::VectorModel<float>>();
-                           for (size_t i = 0; i < g_aht20_history.count; i++)
-                           {
-                               const size_t idx = (g_aht20_history.head + AHT20_HISTORY - 1 - i) % AHT20_HISTORY;
-                               tempHistory->push_back(static_cast<float>(g_aht20_history.readings[idx].temperature));
-                           }
-
+                           auto data = g_aht20_history.map([](const aht20_reading_t& reading) { return reading.temperature; });
+                           const auto tempHistory = std::make_shared<slint::VectorModel<float>>(data);
                            ui->set_indoor_data(LocalData{
-                               .tempC = g_aht20_history.last_reading->temperature,
-                               .relHumidity = g_aht20_history.last_reading->humidity,
+                               .tempC = g_aht20_history.last().temperature,
+                               .relHumidity = g_aht20_history.last().humidity,
                                .tempHistory = tempHistory,
                            });
 
