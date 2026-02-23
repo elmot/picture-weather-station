@@ -35,7 +35,7 @@ export component WeatherStation inherits Window {
     in property <bool> day: true;
     in property <LocalData> indoor-data: { relHumidity:0.0001, tempC:-10.00001 };
     in property <AdaIoData> adafruit-data: { value: 33.33455453, connFail: true };
-    in property <RuuviData> roovi-data: { relHumidity: 0.0001, tempC: 0.0001, atmPHgmm: 0.0001, battV: 0.0001, connFail: true };
+    in property <RuuviData> roovi-data: { relHumidity: 0.0001, tempC: 0.0001, atmPHgmm: 0.0001, battV: 2.7, connFail: true };
     in property <OpenMeteoData> meteo-data: {
         tempC: -15.6777,
         tempFeelsC: -18.788878,
@@ -93,9 +93,11 @@ export component WeatherStation inherits Window {
                 }
 
                 Text {
-                    color: white;
+                    color: roovi-data.battV > 2.7 ? white
+                    	:  roovi-data.battV > 2.5 ?  yellow
+                    	: darkred;
                     font-size: 14px;
-                    text: "Batt: \{roovi-data.battV.to-fixed(1)}V";
+                    text: "Bat: \{roovi-data.battV.to-fixed(1)}V";
                 }
             }
         }
