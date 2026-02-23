@@ -80,8 +80,9 @@ static void lcd_init()
     ESP_ERROR_CHECK(esp_lcd_panel_reset(s_panel));
     ESP_ERROR_CHECK(esp_lcd_panel_init(s_panel));
 
-    /* dir=2 in MicroPython -> 180 deg rotation -> mirror both axes */
-    ESP_ERROR_CHECK(esp_lcd_panel_mirror(s_panel, false, true));
+    /* Landscape: swap X/Y axes, then mirror to get correct orientation */
+    ESP_ERROR_CHECK(esp_lcd_panel_swap_xy(s_panel, true));
+    ESP_ERROR_CHECK(esp_lcd_panel_mirror(s_panel, false, false));
 
     ESP_LOGI(TAG, "LCD initialised (%dx%d)", LCD_H_RES, LCD_V_RES);
 }

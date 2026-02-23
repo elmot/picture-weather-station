@@ -36,7 +36,7 @@ export component WeatherStation inherits Window {
     in property <int> weather-code: -1;
     in property <bool> day: true;
     in property <LocalData> indoor-data: { relHumidity:0.0001, tempC:-10.00001 };
-    in property <AdaIoData> adafruit-data: { value: 33.33455453, connFail: true };
+    in property <AdaIoData> adafruit-data: { value: 333.33455453, connFail: true };
     in property <RuuviData> roovi-data: { relHumidity: 0.0001, tempC: 0.0001, atmPHgmm: 0.0001, battV: 2.7, connFail: true };
     in property <OpenMeteoData> meteo-data: {
         tempC: -15.6777,
@@ -46,24 +46,71 @@ export component WeatherStation inherits Window {
         windDir: "NW",
         connFail: true
     };
+    private property <physical-length> main-font-size:13px;
+    private property <physical-length> reg-widget-width:73px;
 
-    width: 240px;
-    height: 320px;
+    width: 320px;
+    height: 240px;
     background: #FF7F00;
+    WeatherIcon {
+        x: 0;
+        y: 0px;
+        day: day;
+        code: weather-code;
+    }
+
+    DataWidget {
+        name: "AdaIO";
+        valid: !adafruit-data.connFail;
+        x: 79px;
+        y: 7px;
+        width: 83px;
+        HorizontalLayout {
+            x: 4px;
+            alignment: start;
+            Text {
+                text: "CO";
+                color: white;
+                font-size: main-font-size;
+            }
+
+            Text {
+                y: 3px;
+                color: white;
+                font-size: main-font-size - 2px;
+                text: "2";
+            }
+
+            Text {
+                text: ": \{ adafruit-data.value.to-fixed(0)}";
+                width: 32px;
+                color: white;
+                font-size: main-font-size;
+            }
+        }
+
+        Text {
+            horizontal-alignment: center;
+            text: "ppm";
+            color: white;
+            font-size: main-font-size;
+        }
+    }
 
     DataWidget {
         name: "Ruuvi";
         x: 7px;
-        y: 265px;
+        y: 184px;
         valid: !roovi-data.connFail;
         GridLayout {
+        	width: 133px;
             spacing-horizontal: 8px;
             Row {
                 HorizontalLayout {
                     alignment: start;
                     Text {
                         color: white;
-                        font-size: 14px;
+                        font-size: main-font-size;
                         text: "T: \{roovi-data.tempC.to-fixed(1)}";
                     }
 
@@ -75,14 +122,14 @@ export component WeatherStation inherits Window {
 
                     Text {
                         color: white;
-                        font-size: 14px;
+                        font-size: main-font-size;
                         text: "C";
                     }
                 }
 
                 Text {
                     color: white;
-                    font-size: 14px;
+                    font-size: main-font-size;
                     text: "H: \{roovi-data.relHumidity.to-fixed(0)}%";
                 }
             }
@@ -90,13 +137,13 @@ export component WeatherStation inherits Window {
             Row {
                 Text {
                     color: white;
-                    font-size: 14px;
+                    font-size: main-font-size;
                     text: "P: \{roovi-data.atmPHgmm.to-fixed(0)} mmHg";
                 }
 
                 Text {
                     color: roovi-data.battV > 2.7 ? white : roovi-data.battV > 2.5 ? yellow : darkred;
-                    font-size: 14px;
+                    font-size: main-font-size;
                     text: "Bat: \{roovi-data.battV.to-fixed(1)}V";
                 }
             }
@@ -106,13 +153,14 @@ export component WeatherStation inherits Window {
     DataWidget {
         name: "City";
         x: 7px;
-        y: 170px;
+        y: 85px;
         valid: !meteo-data.connFail;
         HorizontalLayout {
+        	width: 133px;
             alignment: start;
             Text {
                 color: white;
-                font-size: 14px;
+                font-size: main-font-size;
                 text: "T: \{meteo-data.tempC.to-fixed(1)} (\{meteo-data.tempFeelsC.to-fixed(1)} )";
             }
 
@@ -124,14 +172,14 @@ export component WeatherStation inherits Window {
 
             Text {
                 color: white;
-                font-size: 14px;
+                font-size: main-font-size;
                 text: "C";
             }
         }
 
         Text {
             color: white;
-            font-size: 14px;
+            font-size: main-font-size;
             text: "Wind: \{meteo-data.windDir} \{meteo-data.windSpeed.to-fixed(1)} (\{meteo-data.windGusts.to-fixed(0)}) m/s";
         }
     }
@@ -139,14 +187,15 @@ export component WeatherStation inherits Window {
     DataWidget {
         name: "Local";
         x: 7px;
-        y: 227px;
+        y: 142px;
         HorizontalLayout {
+        	width: 133px;
             spacing: 8px;
             HorizontalLayout {
                 alignment: start;
                 Text {
                     color: white;
-                    font-size: 14px;
+                    font-size: main-font-size;
                     text: "T: \{indoor-data.tempC.to-fixed(1)}";
                 }
 
@@ -158,14 +207,14 @@ export component WeatherStation inherits Window {
 
                 Text {
                     color: white;
-                    font-size: 14px;
+                    font-size: main-font-size;
                     text: "C";
                 }
             }
 
             Text {
                 color: white;
-                font-size: 14px;
+                font-size: main-font-size;
                 text: "H: \{indoor-data.relHumidity.to-fixed(0)}%";
             }
         }
@@ -177,47 +226,12 @@ export component WeatherStation inherits Window {
         source: meteo-data.condition == FoxConditionEnum.wind ? @image-url("../pict/fox_wind.png") : meteo-data.condition == FoxConditionEnum.snow ? @image-url("../pict/fox_snow.png") : meteo-data.condition == FoxConditionEnum.rain ? @image-url("../pict/fox_rain.png") : @image-url("../pict/fox_sun.png");
     }
 
-    WeatherIcon {
-        x: 0;
-        y: 80px;
-        day: day;
-        code: weather-code;
-    }
-
-    DataWidget {
-        name: "AdaIO";
-        valid: !adafruit-data.connFail;
-        x: 140px;
-        y: 227px;
-        HorizontalLayout {
-            x: 4px;
-            alignment: start;
-            Text {
-                text: "CO";
-                color: white;
-                font-size: 14px;
-            }
-
-            Text {
-                y: 5px;
-                color: white;
-                font-size: 12px;
-                text: "2";
-            }
-
-            Text {
-                text: ": \{ adafruit-data.value.to-fixed(0)}ppm";
-                color: white;
-                font-size: 14px;
-            }
-        }
-    }
     Chart {
-    	x:100px;
-    	y:100px;
-    	width: 140px;
-    	height: 100px;
-    	background: blue;
-    	data: indoor-data.tempHistory;
+        x: 160px;
+        y: 162px;
+        width: 160px;
+        height: 78px;
+        background: blue;
+        data: indoor-data.tempHistory;
     }
 }

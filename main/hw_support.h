@@ -9,8 +9,8 @@
 extern "C" {
 #endif
 
-#define LCD_H_RES        240
-#define LCD_V_RES        320
+#define LCD_H_RES        320
+#define LCD_V_RES        240
 
 extern esp_lcd_panel_handle_t s_panel;
 
