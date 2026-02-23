@@ -28,6 +28,7 @@ export struct LocalData {
 }
 
 export component WeatherStation inherits Window {
+    in property <string> fox-condition: "rain";
     in property <int> weather-code: -1;
     in property <bool> day: true;
     in property <LocalData> indoor-data: { relHumidity:0.0001, tempC:-10.00001 };
@@ -167,7 +168,10 @@ export component WeatherStation inherits Window {
     }
 
     Image {
-        source: @image-url("../pict/wind-fox-a.png");
+        source: fox-condition == "wind" ? @image-url("../pict/fox_wind.png") :
+                fox-condition == "snow" ? @image-url("../pict/fox_snow.png") :
+                fox-condition == "rain" ? @image-url("../pict/fox_rain.png") :
+                @image-url("../pict/fox_sun.png");
         x: parent.width - self.width;
         y: 0;
     }
@@ -194,7 +198,7 @@ export component WeatherStation inherits Window {
             }
 
             Text {
-                y: 8px;
+                y: 5px;
                 color: white;
                 font-size: 12px;
                 text: "2";

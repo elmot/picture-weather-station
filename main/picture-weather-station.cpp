@@ -23,6 +23,7 @@ bool isDataExpired(const TickType_t last_update)
     if (last_update == 0) return true;
     return pdTICKS_TO_MS(now - last_update) > (1000 * 60 * 60);
 }
+
 /*-----------------------------------------------------------------------
  * app_main
  *---------------------------------------------------------------------*/
@@ -90,9 +91,53 @@ extern "C" void app_main(void)
                            /* Adafruit IO */
                            ui->set_adafruit_data({
                                .value = static_cast<float>(g_adafruit.value),
-                               .connFail = isDataExpired(g_adafruit.last_update)});
+                               .connFail = isDataExpired(g_adafruit.last_update)
+                           });
 
-                           /* Data age status line */
+                           /* Fox */
+                           const char* fox_condition;
+                           switch (g_meteo.code)
+                           {
+                           case WMO_CLEAR_SKY:
+                           case WMO_MAINLY_CLEAR:
+                           case WMO_PARTLY_CLOUDY:
+                           case WMO_OVERCAST:
+                           case WMO_FOG:
+                           case WMO_RIME_FOG:
+                               fox_condition = "sun";
+                               break;
+                           case WMO_DRIZZLE_LIGHT:
+                           case WMO_DRIZZLE_MODERATE:
+                           case WMO_DRIZZLE_DENSE:
+                           case WMO_FREEZING_DRIZZLE_LIGHT:
+                           case WMO_FREEZING_DRIZZLE_DENSE:
+                           case WMO_RAIN_SLIGHT:
+                           case WMO_RAIN_MODERATE:
+                           case WMO_RAIN_HEAVY:
+                           case WMO_FREEZING_RAIN_LIGHT:
+                           case WMO_FREEZING_RAIN_HEAVY:
+                           case WMO_RAIN_SHOWERS_SLIGHT:
+                           case WMO_RAIN_SHOWERS_MODERATE:
+                           case WMO_RAIN_SHOWERS_VIOLENT:
+                           case WMO_THUNDERSTORM:
+                               fox_condition = "rain";
+                               break;
+                           case WMO_SNOW_SLIGHT:
+                           case WMO_SNOW_MODERATE:
+                           case WMO_SNOW_HEAVY:
+                           case WMO_SNOW_GRAINS:
+                           case WMO_SNOW_SHOWERS_SLIGHT:
+                           case WMO_SNOW_SHOWERS_HEAVY:
+                           case WMO_THUNDERSTORM_HAIL_SLIGHT:
+                           case WMO_THUNDERSTORM_HAIL_HEAVY:
+                               fox_condition = "snow";
+                               break;
+                           default:
+                               fox_condition = "sun";
+
+                               break;
+                           }
+                           ui->set_fox_condition(slint::SharedString{fox_condition});
                        });
 
     ESP_LOGI(TAG, "Starting Slint UI");
