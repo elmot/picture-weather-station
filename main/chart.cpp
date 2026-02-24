@@ -34,8 +34,11 @@ static void draw_line(slint::Rgba8Pixel* buf, int w, int h,
 
 slint::Image ChartSupportCodeBase::render_chart(const int w, const int h,
                                                 const std::shared_ptr<slint::Model<float>>& data,
+                                                float minY, float maxY,
                                                 const slint::Color& lineColor, const slint::
-                                                Color& gridColor, const int gridRows, const int gridCols)
+                                                Color& gridColor,
+                                                int gridRows, const int autoGridRows,
+                                                const int gridCols)
 {
     slint::SharedPixelBuffer<slint::Rgba8Pixel> pxbuf(w, h);
     auto* px = pxbuf.begin();
@@ -46,6 +49,7 @@ slint::Image ChartSupportCodeBase::render_chart(const int w, const int h,
     /* Draw horizontal grid lines */
     const slint::Rgba8Pixel gridPixel{gridColor.red(), gridColor.green(), gridColor.blue(), gridColor.alpha()};
 
+    if (gridRows <0 ) gridRows = autoGridRows;
     if (gridRows > 0)
     {
         for (int i = 1; i < gridRows; i++)
@@ -74,30 +78,7 @@ slint::Image ChartSupportCodeBase::render_chart(const int w, const int h,
     const unsigned int count = data->row_count();
     if (count < 2) return {pxbuf};
 
-    float minY = INFINITY;
-    float maxY = -INFINITY;
-    for (int i = 0; i < count; i++)
-    {
-        const float t = data.get()->row_data(i).value_or(0.0f);
-        if (t < minY) minY = t;
-        if (t > maxY) maxY = t;
-    }
-
-    if (!std::isfinite(minY)) minY = 0;
-    if (!std::isfinite(maxY)) maxY = 0;
-    /* Add margin */
-    const float delta = (maxY - minY) / 20;
-    maxY += delta;
-    minY -= delta;
-    float range;
-    do
-    {
-        range = maxY - minY;
-        if (range >= 0.0001) break;
-        maxY += 0.00005f;
-        minY -= 0.00005f;
-    }
-    while (true);
+    float range = maxY - minY;
 
     /* Draw chart line */
     int prev_x = -1, prev_y = -1;
@@ -116,4 +97,71 @@ slint::Image ChartSupportCodeBase::render_chart(const int w, const int h,
     }
 
     return {pxbuf};
+}
+
+std::shared_ptr<slint::Model<float>> ChartSupportCodeBase::calcBounds(const std::shared_ptr<slint::Model<float>>& data)
+{
+    const unsigned int count = data->row_count();
+    if (count == 0)
+    {
+        auto result = std::make_shared<slint::VectorModel<float>>();
+        result->push_back(0.0f);
+        result->push_back(10.0f);
+        result->push_back(5.0f);
+        return result;
+    }
+
+    float minVal = INFINITY;
+    float maxVal = -INFINITY;
+
+    for (unsigned int i = 0; i < count; i++)
+    {
+        if (data->row_data(i).has_value())
+        {
+            const float val = data->row_data(i).value_or(0.0f);
+            if (val < minVal) minVal = val;
+            if (val > maxVal) maxVal = val;
+        }
+    }
+
+    if (!std::isfinite(minVal)) minVal = 0.0f;
+    if (!std::isfinite(maxVal)) maxVal = 1.0f;
+
+    float range = maxVal - minVal;
+    if (range < 0.0001f) range = 0.0001f;
+    maxVal += range * 0.051f;
+    minVal -= range * 0.051f;
+    range = maxVal - minVal;
+
+    // Determine granularity based on range
+    // detect most significant
+    // Calculate granularity based on order of magnitude
+    // Find the power of 10 that's less than or equal to range
+    float magnitude = std::pow(10.0f, std::floor(std::log10(range)));
+
+    // Choose a nice step value (1, 2, or 5 times the magnitude)
+    float granularity;
+    float normalized = range / magnitude;
+
+    if (normalized <= 2.0f)
+    {
+        granularity = magnitude * 0.5f;
+    }
+    else if (normalized <= 5.0f)
+    {
+        granularity = magnitude;
+    }
+    else
+    {
+        granularity = magnitude * 2.0f;
+    }
+    // Round bounds to granularity
+    float boundMin = std::floor(minVal / granularity) * granularity;
+    float boundMax = std::ceil(maxVal / granularity) * granularity;
+
+    auto result = std::make_shared<slint::VectorModel<float>>();
+    result->push_back(boundMin);
+    result->push_back(boundMax);
+    result->push_back((boundMax - boundMin) / granularity);
+    return result;
 }
