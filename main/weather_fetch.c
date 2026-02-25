@@ -110,7 +110,7 @@ static void weather_fetch_and_parse(void)
     if (!current)
     {
         ESP_LOGE(TAG, "JSON parse error");
-
+        cJSON_Delete(root);
         return;
     }
 
