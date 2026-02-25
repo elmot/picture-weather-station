@@ -27,12 +27,12 @@ volatile meteo_data_t g_meteo = { // NOLINT(*-interfaces-global-init)
     .wind_speed = NAN, .wind_gusts = NAN, .wind_dir = "",
     .pressure = NAN, .code = -1, .is_day = true, .last_update = 0,
 };
-volatile adafruit_data_t g_adafruit = { .value = NAN, .last_update = 0 };
+volatile adafruit_data_t g_adafruit = {.value = NAN, .last_update = 0};
 
 float g_aio_chart[AIO_CHART_MAX];
 volatile int g_aio_chart_count = 0;
 
-#define FETCH_INTERVAL_MS (15 * 60 * 1000) /* 15 min */
+#define FETCH_INTERVAL_MS (5 * 60 * 1000) /* 5 min */
 #define MAX_RESPONSE_SIZE  4096
 
 #define WEATHER_HOST "https://api.open-meteo.com"
@@ -122,15 +122,15 @@ static void weather_fetch_and_parse(void)
     const unsigned int wind_sector = ((wind_dir + 22) % 360 / 45) % 8;
     const char* wind_dir_name = wind_names[wind_sector];
     const bool is_day = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "is_day"));
-    g_meteo.code       = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "weather_code"));
-    g_meteo.temp       = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "temperature_2m"));
-    g_meteo.feels      = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "apparent_temperature"));
-    g_meteo.humidity   = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "relative_humidity_2m"));
+    g_meteo.code = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "weather_code"));
+    g_meteo.temp = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "temperature_2m"));
+    g_meteo.feels = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "apparent_temperature"));
+    g_meteo.humidity = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "relative_humidity_2m"));
     g_meteo.wind_speed = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_speed_10m"));
     g_meteo.wind_gusts = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_gusts_10m"));
-    g_meteo.wind_dir   = wind_dir_name;
-    g_meteo.pressure   = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "pressure_msl"));
-    g_meteo.is_day     = is_day;
+    g_meteo.wind_dir = wind_dir_name;
+    g_meteo.pressure = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "pressure_msl"));
+    g_meteo.is_day = is_day;
     g_meteo.last_update = xTaskGetTickCount();
     ESP_LOGI(TAG, "Weather Code: %d", g_meteo.code);
     ESP_LOGI(TAG, "Temperature: %.1f C", g_meteo.temp);
@@ -144,7 +144,7 @@ static void weather_fetch_and_parse(void)
  * Fetch latest value from Adafruit IO feed
  *---------------------------------------------------------------------*/
 #define AIO_URL "https://io.adafruit.com/api/v2/" CONFIG_PWS_ADAFRUIT_IO_USER \
-    "/feeds/" CONFIG_PWS_ADAFRUIT_IO_FEED_KEY "/data/last"
+    "/feeds/" CONFIG_PWS_ADAFRUIT_IO_CO2_FEED_KEY "/data/last"
 
 static void adafruit_fetch(void)
 {
@@ -188,7 +188,7 @@ static void adafruit_fetch(void)
     {
         g_adafruit.value = strtof(value_str, nullptr);
         g_adafruit.last_update = xTaskGetTickCount();
-        ESP_LOGI(TAG, "Adafruit IO: %s = %.2f", CONFIG_PWS_ADAFRUIT_IO_FEED_KEY, g_adafruit.value);
+        ESP_LOGI(TAG, "Adafruit IO: %s = %.2f", CONFIG_PWS_ADAFRUIT_IO_CO2_FEED_KEY, g_adafruit.value);
     }
 
     cJSON_Delete(root);
@@ -198,22 +198,22 @@ static void adafruit_fetch(void)
  * Publish Ruuvi sensor data as JSON to Adafruit IO feed
  *---------------------------------------------------------------------*/
 #define AIO_PUBLISH_URL "https://io.adafruit.com/api/v2/" CONFIG_PWS_ADAFRUIT_IO_USER \
-    "/feeds/" CONFIG_PWS_ADAFRUIT_IO_PUBLISH_FEED "/data"
+    "/feeds/" CONFIG_PWS_ADAFRUIT_IO_PUBLISH_JSON_FEED "/data"
 
 static void adafruit_publish_ruuvi(void)
 {
     if (g_ruuvi_data.last_update == 0) return;
 
-    cJSON *value_obj = cJSON_CreateObject();
+    cJSON* value_obj = cJSON_CreateObject();
     cJSON_AddNumberToObject(value_obj, "temperature", g_ruuvi_data.temperature);
     cJSON_AddNumberToObject(value_obj, "pressure", g_ruuvi_data.pressure_mmhg);
     cJSON_AddNumberToObject(value_obj, "humidity", g_ruuvi_data.humidity);
-    char *value_str = cJSON_PrintUnformatted(value_obj);
+    char* value_str = cJSON_PrintUnformatted(value_obj);
     cJSON_Delete(value_obj);
 
-    cJSON *root = cJSON_CreateObject();
+    cJSON* root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "value", value_str);
-    char *body = cJSON_PrintUnformatted(root);
+    char* body = cJSON_PrintUnformatted(root);
     cJSON_free(value_str);
     cJSON_Delete(root);
 
@@ -228,7 +228,7 @@ static void adafruit_publish_ruuvi(void)
     esp_http_client_handle_t client = esp_http_client_init(&config);
     esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
     esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_post_field(client, body, strlen(body));
+    esp_http_client_set_post_field(client, body, (int)strlen(body));
 
     esp_err_t err = esp_http_client_perform(client);
     int status = esp_http_client_get_status_code(client);
@@ -246,8 +246,15 @@ static void adafruit_publish_ruuvi(void)
         return;
     }
     ESP_LOGI(TAG, "Published Ruuvi data to Adafruit IO feed '%s'",
-             CONFIG_PWS_ADAFRUIT_IO_PUBLISH_FEED);
+             CONFIG_PWS_ADAFRUIT_IO_PUBLISH_JSON_FEED);
 }
+
+/*-----------------------------------------------------------------------
+ * Publish Ruuvi pressure to a dedicated Adafruit IO feed
+ *---------------------------------------------------------------------*/
+#define AIO_PRESSURE_URL "https://io.adafruit.com/api/v2/" CONFIG_PWS_ADAFRUIT_IO_USER \
+    "/feeds/" CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED "/data"
+
 
 /*-----------------------------------------------------------------------
  * Fetch chart data from Adafruit IO
@@ -261,7 +268,7 @@ static void adafruit_publish_ruuvi(void)
 
 static void aio_chart_fetch(void)
 {
-    char *buf = (char *)heap_caps_malloc(AIO_CHART_BUF_SIZE, MALLOC_CAP_SPIRAM);
+    char* buf = (char*)heap_caps_malloc(AIO_CHART_BUF_SIZE, MALLOC_CAP_SPIRAM);
     if (!buf)
     {
         ESP_LOGE(TAG, "AIO chart: alloc failed");
@@ -299,7 +306,7 @@ static void aio_chart_fetch(void)
 
     ESP_LOGI(TAG, "AIO chart: received %d bytes", (int)resp.len);
 
-    cJSON *root = cJSON_Parse(buf);
+    cJSON* root = cJSON_Parse(buf);
     if (!root)
     {
         ESP_LOGE(TAG, "AIO chart: JSON parse error");
@@ -307,7 +314,7 @@ static void aio_chart_fetch(void)
         return;
     }
 
-    cJSON *data_arr = cJSON_GetObjectItem(root, "data");
+    cJSON* data_arr = cJSON_GetObjectItem(root, "data");
     if (!data_arr || !cJSON_IsArray(data_arr))
     {
         ESP_LOGE(TAG, "AIO chart: missing 'data' array");
@@ -318,17 +325,17 @@ static void aio_chart_fetch(void)
 
     /* Each element is [timestamp_str, value_str] — already chronological */
     int total = 0;
-    cJSON *row = NULL;
+    cJSON const * row = nullptr;
     cJSON_ArrayForEach(row, data_arr)
     {
         if (total >= AIO_CHART_MAX) break;
         if (!cJSON_IsArray(row)) continue;
-        cJSON *val = cJSON_GetArrayItem(row, 1);
+        cJSON* val = cJSON_GetArrayItem(row, 1);
         if (!val) continue;
-        const char *s = cJSON_GetStringValue(val);
+        const char* s = cJSON_GetStringValue(val);
         if (s)
         {
-            g_aio_chart[total++] = strtof(s, NULL);
+            g_aio_chart[total++] = strtof(s, nullptr);
         }
         else if (cJSON_IsNumber(val))
         {
@@ -343,35 +350,71 @@ static void aio_chart_fetch(void)
     ESP_LOGI(TAG, "AIO chart: %d entries", total);
 }
 
-/*-----------------------------------------------------------------------
- * AIO chart task — runs every 5 min, started after WiFi connects
- *---------------------------------------------------------------------*/
-#define AIO_CHART_INTERVAL_MS (5 * 60 * 1000)
-
-_Noreturn void aio_chart_task(void* arg)
+static void adafruit_publish_pressure(void)
 {
-    (void)arg;
-    for (;;)
+    if (sizeof(CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED) <= 1)
     {
-        aio_chart_fetch();
-        vTaskDelay(pdMS_TO_TICKS(AIO_CHART_INTERVAL_MS));
+        ESP_LOGW(TAG, "Pressure feed key not configured, skipping publish");
+        return;
     }
+    if (g_ruuvi_data.last_update == 0 ||
+        pdTICKS_TO_MS(xTaskGetTickCount() - g_ruuvi_data.last_update) > (1000 * 60 * 60))
+    {
+        ESP_LOGW(TAG, "Ruuvi pressure data unavailable or too old, skipping publish");
+        return;
+    }
+
+    char body[64];
+    snprintf(body, sizeof(body), "{\"value\":\"%.2f\"}", g_ruuvi_data.pressure_mmhg);
+
+    esp_http_client_config_t config = {
+        .url = AIO_PRESSURE_URL,
+        .method = HTTP_METHOD_POST,
+        .timeout_ms = 10000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_post_field(client, body, (int)strlen(body));
+
+    esp_err_t err = esp_http_client_perform(client);
+    int status = esp_http_client_get_status_code(client);
+    esp_http_client_cleanup(client);
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Pressure publish failed: %s", esp_err_to_name(err));
+        return;
+    }
+    if (status != 200 && status != 201)
+    {
+        ESP_LOGW(TAG, "Pressure publish HTTP status %d", status);
+        return;
+    }
+    ESP_LOGI(TAG, "Published pressure %.2f mmHg to feed '%s'",
+             g_ruuvi_data.pressure_mmhg, CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED);
 }
 
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num;
 
-static void event_handler(void *arg, esp_event_base_t event_base,
-                          int32_t event_id, void *event_data)
+static void event_handler(void* arg, esp_event_base_t event_base,
+                          int32_t event_id, void* event_data)
 {
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
+    {
         esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-            esp_wifi_connect();
-            s_retry_num++;
-            ESP_LOGI(TAG, "Retrying connection %d...", s_retry_num);
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+    }
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
+    {
+        esp_wifi_connect();
+        s_retry_num++;
+        ESP_LOGI(TAG, "Retrying connection %d...", s_retry_num);
+    }
+    else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
+    {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*)event_data;
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
@@ -398,7 +441,7 @@ void wifi_init_sta(void)
 
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid     = CONFIG_PWS_WIFI_SSID,
+            .ssid = CONFIG_PWS_WIFI_SSID,
             .password = CONFIG_PWS_WIFI_PASSWORD,
         },
     };
@@ -409,12 +452,15 @@ void wifi_init_sta(void)
     ESP_LOGI(TAG, "Connecting to '%s'...", CONFIG_PWS_WIFI_SSID);
 
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
-        WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
-        pdFALSE, pdFALSE, portMAX_DELAY);
+                                           WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
+                                           pdFALSE, pdFALSE, portMAX_DELAY);
 
-    if (bits & WIFI_CONNECTED_BIT) {
+    if (bits & WIFI_CONNECTED_BIT)
+    {
         ESP_LOGI(TAG, "Connected to '%s'", CONFIG_PWS_WIFI_SSID);
-    } else {
+    }
+    else
+    {
         ESP_LOGW(TAG, "Could not connect to '%s'", CONFIG_PWS_WIFI_SSID);
     }
 }
@@ -426,23 +472,13 @@ _Noreturn void wifi_task(void* arg)
 {
     (void)arg;
     wifi_init_sta();
-    if (sizeof(CONFIG_PWS_ADAFRUIT_IO_CHART_NAME) <= 1)
-    {
-        ESP_LOGW(TAG, "AIO chart name not configured");
-    }
-    if (sizeof(CONFIG_PWS_ADAFRUIT_IO_CHART_FEED) <= 1)
-    {
-        ESP_LOGW(TAG, "AIO chart feed key not configured, chart task disabled");
-    }
-    else
-    {
-        xTaskCreate(aio_chart_task, "aiochart", 8192, NULL, 5, NULL);
-    }
     for (;;)
     {
         weather_fetch_and_parse();
         adafruit_fetch();
         adafruit_publish_ruuvi();
+        adafruit_publish_pressure();
+        aio_chart_fetch();
         vTaskDelay(pdMS_TO_TICKS(FETCH_INTERVAL_MS));
     }
 }

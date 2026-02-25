@@ -44,17 +44,24 @@ menu "Picture Weather Station"
         help
             Adafruit IO active key (from io.adafruit.com settings).
 
-    config PWS_ADAFRUIT_IO_FEED_KEY
+    config PWS_ADAFRUIT_IO_CO2_FEED_KEY
         string "Adafruit IO feed key"
         default ""
         help
             Key of the Adafruit IO feed to read (e.g. "outdoor-temp").
 
-    config PWS_ADAFRUIT_IO_PUBLISH_FEED
+    config PWS_ADAFRUIT_IO_PUBLISH_JSON_FEED
         string "Adafruit IO publish feed key (Ruuvi)"
         default "your-adafruit-feed-tag"
         help
             Key of the Adafruit IO feed to publish Ruuvi sensor data to as JSON.
+
+    config PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED
+        string "Adafruit IO pressure feed key"
+        default ""
+        help
+            Key of the Adafruit IO feed to publish Ruuvi pressure (mmHg) to.
+            Leave empty to disable.
 
     config PWS_ADAFRUIT_IO_CHART_FEED
         string "Adafruit IO chart feed key"
