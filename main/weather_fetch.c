@@ -10,6 +10,7 @@
 #include "freertos/event_groups.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
+#include "esp_heap_caps.h"
 
 #define WIFI_CONNECTED_BIT  BIT0
 #define WIFI_FAIL_BIT       BIT1
@@ -27,6 +28,9 @@ volatile meteo_data_t g_meteo = { // NOLINT(*-interfaces-global-init)
     .pressure = NAN, .code = -1, .is_day = true, .last_update = 0,
 };
 volatile adafruit_data_t g_adafruit = { .value = NAN, .last_update = 0 };
+
+float g_aio_chart[AIO_CHART_MAX];
+volatile int g_aio_chart_count = 0;
 
 #define FETCH_INTERVAL_MS (15 * 60 * 1000) /* 15 min */
 #define MAX_RESPONSE_SIZE  4096
@@ -245,6 +249,115 @@ static void adafruit_publish_ruuvi(void)
              CONFIG_PWS_ADAFRUIT_IO_PUBLISH_FEED);
 }
 
+/*-----------------------------------------------------------------------
+ * Fetch chart data from Adafruit IO
+ * Response: { "columns":["date","avg"], "data":[["...", "val"], ...] }
+ *---------------------------------------------------------------------*/
+#define AIO_CHART_URL "https://io.adafruit.com/api/v2/" CONFIG_PWS_ADAFRUIT_IO_USER \
+    "/feeds/" CONFIG_PWS_ADAFRUIT_IO_CHART_FEED \
+    "/data/chart?hours=48&resolution=30&field=avg"
+
+#define AIO_CHART_BUF_SIZE 8192
+
+static void aio_chart_fetch(void)
+{
+    char *buf = (char *)heap_caps_malloc(AIO_CHART_BUF_SIZE, MALLOC_CAP_SPIRAM);
+    if (!buf)
+    {
+        ESP_LOGE(TAG, "AIO chart: alloc failed");
+        return;
+    }
+
+    http_buf_t resp = {.buf = buf, .len = 0, .cap = AIO_CHART_BUF_SIZE};
+
+    esp_http_client_config_t config = {
+        .url = AIO_CHART_URL,
+        .event_handler = http_event_handler,
+        .user_data = &resp,
+        .timeout_ms = 15000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
+
+    esp_err_t err = esp_http_client_perform(client);
+    int status = esp_http_client_get_status_code(client);
+    esp_http_client_cleanup(client);
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "AIO chart fetch failed: %s", esp_err_to_name(err));
+        free(buf);
+        return;
+    }
+    if (status != 200)
+    {
+        ESP_LOGW(TAG, "AIO chart HTTP status %d", status);
+        free(buf);
+        return;
+    }
+
+    ESP_LOGI(TAG, "AIO chart: received %d bytes", (int)resp.len);
+
+    cJSON *root = cJSON_Parse(buf);
+    if (!root)
+    {
+        ESP_LOGE(TAG, "AIO chart: JSON parse error");
+        free(buf);
+        return;
+    }
+
+    cJSON *data_arr = cJSON_GetObjectItem(root, "data");
+    if (!data_arr || !cJSON_IsArray(data_arr))
+    {
+        ESP_LOGE(TAG, "AIO chart: missing 'data' array");
+        cJSON_Delete(root);
+        free(buf);
+        return;
+    }
+
+    /* Each element is [timestamp_str, value_str] — already chronological */
+    int total = 0;
+    cJSON *row = NULL;
+    cJSON_ArrayForEach(row, data_arr)
+    {
+        if (total >= AIO_CHART_MAX) break;
+        if (!cJSON_IsArray(row)) continue;
+        cJSON *val = cJSON_GetArrayItem(row, 1);
+        if (!val) continue;
+        const char *s = cJSON_GetStringValue(val);
+        if (s)
+        {
+            g_aio_chart[total++] = strtof(s, NULL);
+        }
+        else if (cJSON_IsNumber(val))
+        {
+            g_aio_chart[total++] = (float)cJSON_GetNumberValue(val);
+        }
+    }
+
+    cJSON_Delete(root);
+    free(buf);
+
+    g_aio_chart_count = total;
+    ESP_LOGI(TAG, "AIO chart: %d entries", total);
+}
+
+/*-----------------------------------------------------------------------
+ * AIO chart task — runs every 5 min, started after WiFi connects
+ *---------------------------------------------------------------------*/
+#define AIO_CHART_INTERVAL_MS (5 * 60 * 1000)
+
+_Noreturn void aio_chart_task(void* arg)
+{
+    (void)arg;
+    for (;;)
+    {
+        aio_chart_fetch();
+        vTaskDelay(pdMS_TO_TICKS(AIO_CHART_INTERVAL_MS));
+    }
+}
+
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num;
 
@@ -313,6 +426,18 @@ _Noreturn void wifi_task(void* arg)
 {
     (void)arg;
     wifi_init_sta();
+    if (sizeof(CONFIG_PWS_ADAFRUIT_IO_CHART_NAME) <= 1)
+    {
+        ESP_LOGW(TAG, "AIO chart name not configured");
+    }
+    if (sizeof(CONFIG_PWS_ADAFRUIT_IO_CHART_FEED) <= 1)
+    {
+        ESP_LOGW(TAG, "AIO chart feed key not configured, chart task disabled");
+    }
+    else
+    {
+        xTaskCreate(aio_chart_task, "aiochart", 8192, NULL, 5, NULL);
+    }
     for (;;)
     {
         weather_fetch_and_parse();

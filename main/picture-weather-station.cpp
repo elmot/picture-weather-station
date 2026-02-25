@@ -139,6 +139,15 @@ extern "C" void app_main(void)
                                .connFail = isDataExpired(g_adafruit.last_update)
                            });
 
+                           /* AIO chart */
+                           {
+                               int count = g_aio_chart_count;
+                               std::vector<float> cv(g_aio_chart,
+                                                     g_aio_chart + count);
+                               ui->set_chart_history(
+                                   std::make_shared<slint::VectorModel<float>>(cv));
+                           }
+
                        });
 
     ESP_LOGI(TAG, "Starting Slint UI");

@@ -40,6 +40,7 @@ slint::Image ChartSupportCodeBase::render_chart(const int w, const int h,
                                                 int gridRows, const int autoGridRows,
                                                 const int gridCols)
 {
+    if (data == nullptr) return {};
     slint::SharedPixelBuffer<slint::Rgba8Pixel> pxbuf(w, h);
     auto* px = pxbuf.begin();
 

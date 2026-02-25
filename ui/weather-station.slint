@@ -38,6 +38,7 @@ export component WeatherStation inherits Window {
     in property <LocalData> indoor-data: { relHumidity:0.0001, tempC:-10.00001 };
     in property <AdaIoData> adafruit-data: { value: 333.33455453, connFail: true };
     in property <RuuviData> roovi-data: { relHumidity: 0.0001, tempC: 0.0001, atmPHgmm: 0.0001, battV: 2.7, connFail: true };
+    in property <[float]> chart-history;
     in property <OpenMeteoData> meteo-data: {
         tempC: -15.6777,
         tempFeelsC: -18.788878,
@@ -232,6 +233,6 @@ export component WeatherStation inherits Window {
         width: 160px;
         height: 78px;
         background: blue;
-        data: indoor-data.tempHistory;
+        data: chart-history;
     }
 }

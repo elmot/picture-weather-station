@@ -56,4 +56,16 @@ menu "Picture Weather Station"
         help
             Key of the Adafruit IO feed to publish Ruuvi sensor data to as JSON.
 
+    config PWS_ADAFRUIT_IO_CHART_FEED
+        string "Adafruit IO chart feed key"
+        default ""
+        help
+            Key of the Adafruit IO feed to download chart data from.
+
+    config PWS_ADAFRUIT_IO_CHART_NAME
+        string "Chart display name"
+        default "Chart"
+        help
+            Label shown on the chart widget (not used yet).
+
 endmenu

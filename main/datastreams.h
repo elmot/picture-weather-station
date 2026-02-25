@@ -57,6 +57,14 @@ typedef struct
 
 extern volatile adafruit_data_t g_adafruit;
 
+/*-----------------------------------------------------------------------
+ * Adafruit IO chart data
+ *---------------------------------------------------------------------*/
+#define AIO_CHART_MAX 96
+extern float g_aio_chart[AIO_CHART_MAX];
+extern volatile int g_aio_chart_count;
+
+void aio_chart_task(void* arg);
 
 #ifdef __cplusplus
 }
