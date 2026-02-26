@@ -79,7 +79,7 @@ static esp_err_t aht20_read(float *temp, float *hum)
 }
 
 /*-----------------------------------------------------------------------
- * Sensor task — reads AHT20 every 15 min, stores to ring buffer
+ * Sensor task — periodically(AHT20_INTERVAL) reads AHT20, stores to ring buffer
  *---------------------------------------------------------------------*/
 _Noreturn void sensor_task(void *arg)
 {

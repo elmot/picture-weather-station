@@ -213,6 +213,7 @@ static void adafruit_publish_ruuvi(void)
     cJSON_AddNumberToObject(value_obj, "humidity", g_ruuvi_data.humidity);
     char* value_str = cJSON_PrintUnformatted(value_obj);
     cJSON_Delete(value_obj);
+    if (value_str == nullptr) return;
 
     cJSON* root = cJSON_CreateObject();
     if (root == nullptr)

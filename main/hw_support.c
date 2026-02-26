@@ -136,6 +136,6 @@ void backlight(bool on)
     uint8_t out_cmd[] = {XL9535_REG_OUT0, on ? 0x01 : 0};
     ESP_ERROR_CHECK(i2c_master_transmit(s_xl9535, out_cmd, sizeof(out_cmd), -1));
 
-    ESP_LOGI(TAG, "XL9535 pin 0 -> output %s %d", on );
+    ESP_LOGI(TAG, "Backlight %s", on ? "ON" : "OFF");
 
 }

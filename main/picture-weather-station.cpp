@@ -41,28 +41,6 @@ extern "C" void pushAht20Data(float temperature, float humidity)
     g_aht20_history.push({temperature, humidity});
 }
 
-/*-----------------------------------------------------------------------
- * Ruuvi history (sampled every 15 min)
- *---------------------------------------------------------------------*/
-SensorHistory<ruuvi_data_t, 96> g_ruuvi_history{};
-
-extern "C" void recordRuuviData(void)
-{
-    ruuvi_data_t snapshot{};
-    if (isDataExpired(g_ruuvi_data.last_update))
-    {
-        snapshot.temperature = -1000;
-        snapshot.pressure_mmhg = -1000;
-        snapshot.humidity = -1000;
-    }
-    else
-    {
-        snapshot.temperature = g_ruuvi_data.temperature;
-        snapshot.pressure_mmhg = g_ruuvi_data.pressure_mmhg;
-        snapshot.humidity = g_ruuvi_data.humidity;
-    }
-    g_ruuvi_history.push(snapshot);
-}
 
 /*-----------------------------------------------------------------------
  * app_main
@@ -88,9 +66,9 @@ extern "C" void app_main(void)
     });
     backlight(true);
     ruuvi_task_init();
-    xTaskCreate(wifi_task, "weather", 8192, nullptr, 5, nullptr);
+    xTaskCreate(wifi_task, "weather", 16384, nullptr, 5, nullptr);
     ESP_LOGI(TAG, "Weather task started (lat=%s, lon=%s)", CONFIG_PWS_LAT, CONFIG_PWS_LON);
-    xTaskCreate(sensor_task, "sensor", 4096, nullptr, 5, nullptr);
+    xTaskCreate(sensor_task, "sensor", 8096, nullptr, 5, nullptr);
 
     auto ui = WeatherStation::create();
     ChartSupportCode<WeatherStation, ChartSupport>(ui).setup();
