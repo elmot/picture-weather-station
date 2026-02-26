@@ -16,7 +16,7 @@
 constexpr uint32_t WIFI_CONNECTED_BIT = BIT0;
 constexpr uint32_t WIFI_FAIL_BIT = BIT1;
 
-constexpr size_t  AIO_CHART_BUF_SIZE = 8192;
+constexpr size_t  HTTP_BUF_SIZE = 8192;
 
 static_assert(sizeof(CONFIG_PWS_WIFI_SSID) > 1, "WiFi SSID can not be empty. "
               "Define CONFIG_PWS_WIFI_SSID via `idf.py menuconfig` or in `skdconfig.secrets` file");
@@ -34,7 +34,7 @@ float g_aio_chart[AIO_CHART_MAX];
 volatile int g_aio_chart_count = 0;
 
 constexpr uint32_t  FETCH_INTERVAL_MS = 5 * 60 * 1000; /* 5 min */
-constexpr size_t  MAX_RESPONSE_SIZE = 4096;
+
 
 #define WEATHER_HOST "https://api.open-meteo.com"
 #define WEATHER_URL WEATHER_HOST\
@@ -51,6 +51,40 @@ struct http_buf_t
     size_t len;
     size_t cap;
 };
+
+template <size_t CAPACITY>
+class PsramBuf
+{
+    char* p_ = nullptr;
+
+public:
+    char* get()
+    {
+        if (!p_)
+        {
+            p_ = static_cast<char*>(heap_caps_malloc(CAPACITY, MALLOC_CAP_SPIRAM));
+            if (!p_)
+            {
+                ESP_LOGE(WEB_TAG, "PSRAM alloc failed");
+                abort();
+            }
+        }
+        return p_;
+    }
+
+    constexpr size_t cap() { return CAPACITY; }
+
+    template <typename... Args>
+    char const * sprintf(const char* format, Args... args)
+    {
+        char *p = get();
+        snprintf(p, CAPACITY, format, args...);
+        return p;
+    }
+};
+
+
+static PsramBuf<HTTP_BUF_SIZE> s_http_buf;
 
 extern "C" {
 static esp_err_t http_event_handler(esp_http_client_event_t* evt)
@@ -130,9 +164,7 @@ constexpr const char* wind_names[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW
 
 static void weather_fetch_and_parse()
 {
-    static char buf[MAX_RESPONSE_SIZE];
-
-    http_buf_t resp = {.buf = buf, .len = 0, .cap = MAX_RESPONSE_SIZE};
+    http_buf_t resp = {.buf = s_http_buf.get(), .len = 0, .cap = s_http_buf.cap()};
     if (!web_or_adafruit_io_access(WEATHER_URL, false, nullptr, "Weather fetch", &resp, http_event_handler))
     {
         return;
@@ -183,11 +215,10 @@ static void weather_fetch_and_parse()
 
 static void adafruit_fetch()
 {
-    static char buf[1024];
-    http_buf_t resp = {.buf = buf, .len = 0, .cap = sizeof(buf)};
-    const bool success = web_or_adafruit_io_access(AIO_URL, true, nullptr, "Adafruit fetch",
-                                                   &resp, http_event_handler);
-    if (!success) return;
+    http_buf_t resp = {.buf = s_http_buf.get(), .len = 0, .cap = s_http_buf.cap()};
+    if (!web_or_adafruit_io_access(AIO_URL, true, nullptr, "Adafruit fetch",
+                                   &resp, http_event_handler))
+        return;
     cJSON* root = cJSON_Parse(resp.buf);
     if (!root)
     {
@@ -195,8 +226,7 @@ static void adafruit_fetch()
         return;
     }
 
-    const char* value_str = cJSON_GetStringValue(cJSON_GetObjectItem(root, "value"));
-    if (value_str)
+    if (const char* value_str = cJSON_GetStringValue(cJSON_GetObjectItem(root, "value")))
     {
         g_adafruit.value = strtof(value_str, nullptr);
         g_adafruit.last_update = xTaskGetTickCount();
@@ -216,9 +246,8 @@ static void adafruit_publish_ruuvi()
 {
     if (g_ruuvi_data.last_update == 0) return;
 
-    char body[100];
-    snprintf(body, sizeof(body), R"({"value":{"temperature":%.1f,"pressure":%.0f,"humidity":%.2f}})",
-             g_ruuvi_data.temperature, g_ruuvi_data.pressure_mmhg, g_ruuvi_data.humidity);
+    char const * body = s_http_buf.sprintf(R"({"value":{"temperature":%.1f,"pressure":%.0f,"humidity":%.2f}})",
+                     g_ruuvi_data.temperature, g_ruuvi_data.pressure_mmhg, g_ruuvi_data.humidity);
 
     web_or_adafruit_io_access(AIO_PUBLISH_URL, true, body, "Ruuvi publish to " CONFIG_PWS_ADAFRUIT_IO_PUBLISH_JSON_FEED,
                               nullptr,
@@ -243,21 +272,13 @@ static void adafruit_publish_ruuvi()
 
 static void adafruit_io_chart_fetch()
 {
-    static char *buf = nullptr;
-    if (!buf) buf = static_cast<char*>(heap_caps_malloc(AIO_CHART_BUF_SIZE, MALLOC_CAP_SPIRAM));
-    if (!buf)
-    {
-        ESP_LOGE(WEB_TAG, "Cant allocate chart buffer");
-        abort();
-    }
-
-    http_buf_t resp = {.buf = buf, .len = 0, .cap = AIO_CHART_BUF_SIZE};
-    const bool success = web_or_adafruit_io_access(AIO_CHART_URL, true, nullptr,
-                                                   "AIO chart fetch", &resp, http_event_handler);
-    if (!success) return;
+    http_buf_t resp = {.buf = s_http_buf.get(), .len = 0, .cap = s_http_buf.cap()};
+    if (!web_or_adafruit_io_access(AIO_CHART_URL, true, nullptr,
+                                   "AIO chart fetch", &resp, http_event_handler))
+        return;
     ESP_LOGI(AIO_TAG, "AIO chart: received %d bytes", static_cast<int>(resp.len));
 
-    cJSON* root = cJSON_Parse(buf);
+    cJSON* root = cJSON_Parse(resp.buf);
     if (!root)
     {
         ESP_LOGE(AIO_TAG, "AIO chart: JSON parse error");
@@ -281,8 +302,7 @@ static void adafruit_io_chart_fetch()
         if (!cJSON_IsArray(row)) continue;
         cJSON* val = cJSON_GetArrayItem(row, 1);
         if (!val) continue;
-        const char* s = cJSON_GetStringValue(val);
-        if (s)
+        if (const char* s = cJSON_GetStringValue(val))
         {
             g_aio_chart[total++] = strtof(s, nullptr);
         }
@@ -300,7 +320,7 @@ static void adafruit_io_chart_fetch()
 
 static void adafruit_publish_pressure()
 {
-    if (sizeof(CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED) <= 1)
+    if constexpr (sizeof(CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED) <= 1)
     {
         ESP_LOGW(AIO_TAG, "Pressure feed key not configured, skipping publish");
         // ReSharper disable once CppDFAUnreachableCode
@@ -313,8 +333,7 @@ static void adafruit_publish_pressure()
         return;
     }
 
-    char body[64];
-    snprintf(body, sizeof(body), R"({"value":"%.2f"})", g_ruuvi_data.pressure_mmhg);
+    char const* body = s_http_buf.sprintf(R"({"value":"%.2f"})", g_ruuvi_data.pressure_mmhg);
 
     if (web_or_adafruit_io_access(AIO_PRESSURE_URL, true, body, "Pressure publish", nullptr,
                                   nullptr))
