@@ -14,7 +14,7 @@ static const char *TAG = "sensor-ws";
 #define AHT20_ADDR       0x38
 #define AHT20_CMD_INIT   0xBE
 #define AHT20_CMD_MEAS   0xAC
-#define AHT20_INTERVAL   (5 * 1000)      /* 5 sec in ms *///todo set to 15 min
+#define AHT20_INTERVAL   (1 * 60 * 1000)      /* 1 min */
 #define I2C_TIMEOUT      100
 
 static i2c_master_dev_handle_t s_aht20;

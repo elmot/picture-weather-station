@@ -39,7 +39,7 @@ typedef enum
 
 inline FoxConditionEnum fox_condition(const int wmo_weather_code_t)
 {
-    switch (g_meteo.code)
+    switch (wmo_weather_code_t)
     {
     case WMO_CLEAR_SKY:
     case WMO_MAINLY_CLEAR:

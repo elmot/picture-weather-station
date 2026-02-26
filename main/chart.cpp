@@ -80,6 +80,7 @@ slint::Image ChartSupportCodeBase::render_chart(const int w, const int h,
     if (count < 2) return {pxbuf};
 
     float range = maxY - minY;
+    if (range < 0.0001f) range = 0.0001f;
 
     /* Draw chart line */
     int prev_x = -1, prev_y = -1;

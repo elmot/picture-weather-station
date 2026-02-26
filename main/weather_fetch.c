@@ -79,7 +79,7 @@ static void weather_fetch_and_parse(void)
 
     http_buf_t resp = {.buf = buf, .len = 0, .cap = MAX_RESPONSE_SIZE};
 
-    esp_http_client_config_t config = {
+    const esp_http_client_config_t config = {
         .url = WEATHER_URL,
         .event_handler = http_event_handler,
         .user_data = &resp,
@@ -87,9 +87,10 @@ static void weather_fetch_and_parse(void)
         .crt_bundle_attach = esp_crt_bundle_attach,
     };
     esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (client == nullptr) return;
 
-    esp_err_t err = esp_http_client_perform(client);
-    int status = esp_http_client_get_status_code(client);
+    const esp_err_t err = esp_http_client_perform(client);
+    const int status = esp_http_client_get_status_code(client);
     esp_http_client_cleanup(client);
 
     if (err != ESP_OK)
@@ -159,6 +160,7 @@ static void adafruit_fetch(void)
         .crt_bundle_attach = esp_crt_bundle_attach,
     };
     esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (client == nullptr) return;
     esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
 
     esp_err_t err = esp_http_client_perform(client);
@@ -205,6 +207,7 @@ static void adafruit_publish_ruuvi(void)
     if (g_ruuvi_data.last_update == 0) return;
 
     cJSON* value_obj = cJSON_CreateObject();
+    if (value_obj == nullptr) return;
     cJSON_AddNumberToObject(value_obj, "temperature", g_ruuvi_data.temperature);
     cJSON_AddNumberToObject(value_obj, "pressure", g_ruuvi_data.pressure_mmhg);
     cJSON_AddNumberToObject(value_obj, "humidity", g_ruuvi_data.humidity);
@@ -212,6 +215,11 @@ static void adafruit_publish_ruuvi(void)
     cJSON_Delete(value_obj);
 
     cJSON* root = cJSON_CreateObject();
+    if (root == nullptr)
+    {
+        cJSON_free(value_str);
+        return;
+    }
     cJSON_AddStringToObject(root, "value", value_str);
     char* body = cJSON_PrintUnformatted(root);
     cJSON_free(value_str);
@@ -226,6 +234,11 @@ static void adafruit_publish_ruuvi(void)
         .crt_bundle_attach = esp_crt_bundle_attach,
     };
     esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (client==nullptr)
+    {
+        cJSON_free(body);
+        return;
+    }
     esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
     esp_http_client_set_header(client, "Content-Type", "application/json");
     esp_http_client_set_post_field(client, body, (int)strlen(body));
@@ -268,7 +281,7 @@ static void adafruit_publish_ruuvi(void)
 
 static void aio_chart_fetch(void)
 {
-    char* buf = (char*)heap_caps_malloc(AIO_CHART_BUF_SIZE, MALLOC_CAP_SPIRAM);
+    char* buf = heap_caps_malloc(AIO_CHART_BUF_SIZE, MALLOC_CAP_SPIRAM);
     if (!buf)
     {
         ESP_LOGE(TAG, "AIO chart: alloc failed");
@@ -285,6 +298,11 @@ static void aio_chart_fetch(void)
         .crt_bundle_attach = esp_crt_bundle_attach,
     };
     esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (client == nullptr)
+    {
+        free(buf);
+        return;
+    }
     esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
 
     esp_err_t err = esp_http_client_perform(client);
@@ -325,7 +343,7 @@ static void aio_chart_fetch(void)
 
     /* Each element is [timestamp_str, value_str] — already chronological */
     int total = 0;
-    cJSON const * row = nullptr;
+    cJSON const * row;
     cJSON_ArrayForEach(row, data_arr)
     {
         if (total >= AIO_CHART_MAX) break;
@@ -374,6 +392,7 @@ static void adafruit_publish_pressure(void)
         .crt_bundle_attach = esp_crt_bundle_attach,
     };
     esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (client==nullptr) return;
     esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
     esp_http_client_set_header(client, "Content-Type", "application/json");
     esp_http_client_set_post_field(client, body, (int)strlen(body));
