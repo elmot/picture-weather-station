@@ -18,12 +18,14 @@ void wifi_task(void*);
 }
 
 static const char* TAG = "picture-ws";
+
 bool isDataExpired(const TickType_t last_update)
 {
     const auto now = xTaskGetTickCount();
     if (last_update == 0) return true;
     return pdTICKS_TO_MS(now - last_update) > (1000 * 60 * 60);
 }
+
 /*-----------------------------------------------------------------------
  * AHT20 indoor sensor
  *---------------------------------------------------------------------*/
@@ -65,6 +67,7 @@ extern "C" void app_main(void)
         .byte_swap = true,
     });
     backlight(true);
+    g_meteo_queue = xQueueCreate(1, sizeof(meteo_data_t));
     ruuvi_task_init();
     xTaskCreate(wifi_task, "weather", 16384, nullptr, 5, nullptr);
     ESP_LOGI(TAG, "Weather task started (lat=%s, lon=%s)", CONFIG_PWS_LAT, CONFIG_PWS_LON);
@@ -77,24 +80,37 @@ extern "C" void app_main(void)
     slint::Timer timer(std::chrono::milliseconds(1000),
                        [&ui]()
                        {
-                           /* Weather icon (code + day/night handled by Slint conditionals) */
-                           ui->set_weather_code(static_cast<int>(g_meteo.code));
-                           ui->set_day(static_cast<bool>(g_meteo.is_day));
-                           /* Fox */
-                           /* Fetched meteo data */
-                           const auto meteoData = OpenMeteoData{
-                               .tempC = g_meteo.temp,
-                               .tempFeelsC = g_meteo.feels,
-                               .windSpeed = g_meteo.wind_speed,
-                               .windGusts = g_meteo.wind_gusts,
-                               .windDir = g_meteo.wind_dir,
-                               .condition = fox_condition(g_meteo.code),
-                               .connFail = isDataExpired(g_meteo.last_update)
-                           };
-                           ui->set_meteo_data(meteoData);
+                           /* Fetched meteo data — read atomically from queue */
+                           meteo_data_t meteo{};
+                           if (xQueuePeek(g_meteo_queue, &meteo, 0) == pdTRUE)
+                           {
+                               ui->set_weather_code(static_cast<int>(meteo.code));
+                               ui->set_day(static_cast<bool>(meteo.is_day));
+                               ui->set_meteo_data(OpenMeteoData{
+                                   .tempC = meteo.temp,
+                                   .tempFeelsC = meteo.feels,
+                                   .windSpeed = meteo.wind_speed,
+                                   .windGusts = meteo.wind_gusts,
+                                   .windDir = meteo.wind_dir,
+                                   .condition = fox_condition(meteo.code),
+                                   .connFail = isDataExpired(meteo.last_update),
+                               });
+                           }
+                           else
+                           {
+                               static const OpenMeteoData default_meteo_data{
+                                   .tempC = 0.0f, .tempFeelsC = 0.0f, .windSpeed = 0.0f, .windGusts = 0.0f,
+                                   .windDir = slint::SharedString(""), .condition = FoxConditionEnum::Rain,
+                                   .connFail = true,
+                               };
+                               ui->set_meteo_data(default_meteo_data);
+                           }
 
                            /* Indoor sensor */
-                           auto data = g_aht20_history.map([](const aht20_reading_t& reading) { return reading.temperature; });
+                           auto data = g_aht20_history.map([](const aht20_reading_t& reading)
+                           {
+                               return reading.temperature;
+                           });
                            const auto tempHistory = std::make_shared<slint::VectorModel<float>>(data);
                            ui->set_indoor_data(LocalData{
                                .tempC = g_aht20_history.last().temperature,
@@ -125,7 +141,6 @@ extern "C" void app_main(void)
                                ui->set_chart_history(
                                    std::make_shared<slint::VectorModel<float>>(cv));
                            }
-
                        });
 
     ESP_LOGI(TAG, "Starting Slint UI");

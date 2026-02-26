@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,7 +40,7 @@ typedef struct
     TickType_t last_update;
 } meteo_data_t;
 
-extern volatile meteo_data_t g_meteo;
+extern QueueHandle_t g_meteo_queue; /* depth-1 queue, use xQueueOverwrite / xQueuePeek */
 
 /*-----------------------------------------------------------------------
  * AHT20 indoor sensor

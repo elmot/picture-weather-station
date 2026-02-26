@@ -58,7 +58,7 @@ static bool parse_ruuvi_df5(const uint8_t* data, size_t len, ruuvi_data_t* out)
     out->battery_voltage = (battery_bits + 1600) / 1000.0f;
 
     /* MAC address: bytes 18-23 */
-    memcpy(out->mac_address, &data[18], 6);
+    memcpy(out->mac_acopare 2 ddress, &data[18], 6);
     out->last_update = xTaskGetTickCount();
     return true;
 }

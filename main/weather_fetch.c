@@ -7,6 +7,7 @@
 #include "esp_crt_bundle.h"
 #include "cJSON.h"
 #include "datastreams.h"
+#include "freertos/queue.h"
 #include "freertos/event_groups.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -22,11 +23,7 @@ static_assert(sizeof(CONFIG_PWS_WIFI_PASSWORD) > 1, "WiFi password can not be em
               "Define CONFIG_PWS_WIFI_PASSWORD via `idf.py menuconfig` or in `skdconfig.secrets` file");
 
 static const char* TAG = "wifi";
-volatile meteo_data_t g_meteo = { // NOLINT(*-interfaces-global-init)
-    .temp = NAN, .feels = NAN, .humidity = NAN,
-    .wind_speed = NAN, .wind_gusts = NAN, .wind_dir = "",
-    .pressure = NAN, .code = -1, .is_day = true, .last_update = 0,
-};
+QueueHandle_t g_meteo_queue;
 volatile adafruit_data_t g_adafruit = {.value = NAN, .last_update = 0};
 
 float g_aio_chart[AIO_CHART_MAX];
@@ -119,26 +116,31 @@ static void weather_fetch_and_parse(void)
         return;
     }
 
-    const int wind_dir = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_direction_10m"));
-    const unsigned int wind_sector = ((wind_dir + 22) % 360 / 45) % 8;
-    const char* wind_dir_name = wind_names[wind_sector];
-    const bool is_day = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "is_day"));
-    g_meteo.code = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "weather_code"));
-    g_meteo.temp = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "temperature_2m"));
-    g_meteo.feels = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "apparent_temperature"));
-    g_meteo.humidity = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "relative_humidity_2m"));
-    g_meteo.wind_speed = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_speed_10m"));
-    g_meteo.wind_gusts = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_gusts_10m"));
-    g_meteo.wind_dir = wind_dir_name;
-    g_meteo.pressure = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "pressure_msl"));
-    g_meteo.is_day = is_day;
-    g_meteo.last_update = xTaskGetTickCount();
-    ESP_LOGI(TAG, "Weather Code: %d", g_meteo.code);
-    ESP_LOGI(TAG, "Temperature: %.1f C", g_meteo.temp);
-    ESP_LOGI(TAG, "Humidity: %.0f%%", g_meteo.humidity);
-    ESP_LOGI(TAG, "Wind: %s  %.1f m/s (gusts: %.1f m/s)",
-             wind_dir_name, g_meteo.wind_speed, g_meteo.wind_gusts);
+    const int wind_dir_deg = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_direction_10m"));
+    const unsigned int wind_sector = ((wind_dir_deg + 22) % 360 / 45) % 8;
+
+    meteo_data_t meteo = {
+        .temp = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "temperature_2m")),
+        .feels = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "apparent_temperature")),
+        .humidity = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "relative_humidity_2m")),
+        .wind_speed = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_speed_10m")),
+        .wind_gusts = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_gusts_10m")),
+        .wind_dir = wind_names[wind_sector],
+        .pressure = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "pressure_msl")),
+        .code = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "weather_code")),
+        .is_day = (bool)(int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "is_day")),
+        .last_update = xTaskGetTickCount(),
+    };
+
     cJSON_Delete(root);
+
+    xQueueOverwrite(g_meteo_queue, &meteo);
+
+    ESP_LOGI(TAG, "Weather Code: %d", meteo.code);
+    ESP_LOGI(TAG, "Temperature: %.1f C", meteo.temp);
+    ESP_LOGI(TAG, "Humidity: %.0f%%", meteo.humidity);
+    ESP_LOGI(TAG, "Wind: %s  %.1f m/s (gusts: %.1f m/s)",
+             meteo.wind_dir, meteo.wind_speed, meteo.wind_gusts);
 }
 
 /*-----------------------------------------------------------------------
