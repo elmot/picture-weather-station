@@ -14,8 +14,8 @@
 extern "C" {
 void sensor_task(void*);
 void ruuvi_task_init(void);
-void wifi_task(void*);
 }
+void wifi_task(void*);
 
 static const char* TAG = "picture-ws";
 

@@ -1,5 +1,5 @@
-#include <string.h>
-#include <math.h>
+#include <cstring>
+#include <cmath>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -11,9 +11,12 @@
 #include "freertos/event_groups.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
+#include "esp_heap_caps.h"
 
-#define WIFI_CONNECTED_BIT  BIT0
-#define WIFI_FAIL_BIT       BIT1
+constexpr uint32_t WIFI_CONNECTED_BIT = BIT0;
+constexpr uint32_t WIFI_FAIL_BIT = BIT1;
+
+constexpr size_t  AIO_CHART_BUF_SIZE = 8192;
 
 static_assert(sizeof(CONFIG_PWS_WIFI_SSID) > 1, "WiFi SSID can not be empty. "
               "Define CONFIG_PWS_WIFI_SSID via `idf.py menuconfig` or in `skdconfig.secrets` file");
@@ -21,17 +24,17 @@ static_assert(sizeof(CONFIG_PWS_WIFI_SSID) > 1, "WiFi SSID can not be empty. "
 static_assert(sizeof(CONFIG_PWS_WIFI_PASSWORD) > 1, "WiFi password can not be empty. "
               "Define CONFIG_PWS_WIFI_PASSWORD via `idf.py menuconfig` or in `skdconfig.secrets` file");
 
-static const char* TAG = "wifi";
-static const char* WEB_TAG = "WEB";
-static const char* AIO_TAG = "AdafruitIO";
+constexpr const char* TAG = "wifi";
+constexpr const char* WEB_TAG = "WEB";
+constexpr const char* AIO_TAG = "AdafruitIO";
 QueueHandle_t g_meteo_queue;
 volatile adafruit_data_t g_adafruit = {.value = NAN, .last_update = 0};
 
 float g_aio_chart[AIO_CHART_MAX];
 volatile int g_aio_chart_count = 0;
 
-#define FETCH_INTERVAL_MS (5 * 60 * 1000) /* 5 min */
-#define MAX_RESPONSE_SIZE  4096
+constexpr uint32_t  FETCH_INTERVAL_MS = 5 * 60 * 1000; /* 5 min */
+constexpr size_t  MAX_RESPONSE_SIZE = 4096;
 
 #define WEATHER_HOST "https://api.open-meteo.com"
 #define WEATHER_URL WEATHER_HOST\
@@ -42,16 +45,17 @@ volatile int g_aio_chart_count = 0;
 /*-----------------------------------------------------------------------
  * HTTP event handler — accumulates response body into user_data buffer
  *---------------------------------------------------------------------*/
-typedef struct
+struct http_buf_t
 {
     char* buf;
     size_t len;
     size_t cap;
-} http_buf_t;
+};
 
+extern "C" {
 static esp_err_t http_event_handler(esp_http_client_event_t* evt)
 {
-    http_buf_t* resp = (http_buf_t*)evt->user_data;
+    auto* resp = static_cast<http_buf_t*>(evt->user_data);
     if (evt->event_id == HTTP_EVENT_ON_DATA)
     {
         size_t avail = resp->cap - resp->len - 1;
@@ -65,7 +69,7 @@ static esp_err_t http_event_handler(esp_http_client_event_t* evt)
     }
     return ESP_OK;
 }
-
+}
 
 /*-----------------------------------------------------------------------
  * Common http helper
@@ -76,14 +80,13 @@ static bool web_or_adafruit_io_access(const char* url,
                                       const char* label, http_buf_t* response,
                                       http_event_handle_cb http_cb)
 {
-    esp_http_client_config_t config = {
-        .url = url,
-        .method = body == nullptr ? HTTP_METHOD_GET : HTTP_METHOD_POST,
-        .user_data = response,
-        .event_handler = http_cb,
-        .timeout_ms = 10000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
+    esp_http_client_config_t config = {};
+    config.url = url;
+    config.method = body == nullptr ? HTTP_METHOD_GET : HTTP_METHOD_POST;
+    config.timeout_ms = 10000;
+    config.event_handler = http_cb;
+    config.user_data = response;
+    config.crt_bundle_attach = esp_crt_bundle_attach;
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (client == nullptr)
     {
@@ -99,7 +102,7 @@ static bool web_or_adafruit_io_access(const char* url,
     if (body != nullptr)
     {
         esp_http_client_set_header(client, "Content-Type", "application/json");
-        esp_http_client_set_post_field(client, body, (int)strlen(body));
+        esp_http_client_set_post_field(client, body, static_cast<int>(strlen(body)));
     }
 
     esp_err_t err = esp_http_client_perform(client);
@@ -108,12 +111,12 @@ static bool web_or_adafruit_io_access(const char* url,
 
     if (err != ESP_OK)
     {
-        ESP_LOGE(adafruit_io_key? AIO_TAG :WEB_TAG, "%s failed: %s", label, esp_err_to_name(err));
+        ESP_LOGE(adafruit_io_key ? AIO_TAG : WEB_TAG, "%s failed: %s", label, esp_err_to_name(err));
         return false;
     }
     if (status != 200 && status != 201)
     {
-        ESP_LOGW(adafruit_io_key? AIO_TAG :WEB_TAG, "%s HTTP status %d", label, status);
+        ESP_LOGW(adafruit_io_key ? AIO_TAG : WEB_TAG, "%s HTTP status %d", label, status);
         return false;
     }
     return true;
@@ -123,9 +126,9 @@ static bool web_or_adafruit_io_access(const char* url,
 /*-----------------------------------------------------------------------
  * Fetch JSON from URL and parse with cJSON
  *---------------------------------------------------------------------*/
-static const char* wind_names[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+constexpr const char* wind_names[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
 
-static void weather_fetch_and_parse(void)
+static void weather_fetch_and_parse()
 {
     static char buf[MAX_RESPONSE_SIZE];
 
@@ -145,19 +148,19 @@ static void weather_fetch_and_parse(void)
         return;
     }
 
-    const int wind_dir_deg = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_direction_10m"));
+    const int wind_dir_deg = static_cast<int>(cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_direction_10m")));
     const unsigned int wind_sector = ((wind_dir_deg + 22) % 360 / 45) % 8;
 
     meteo_data_t meteo = {
-        .temp = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "temperature_2m")),
-        .feels = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "apparent_temperature")),
-        .humidity = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "relative_humidity_2m")),
-        .wind_speed = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_speed_10m")),
-        .wind_gusts = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_gusts_10m")),
+        .temp = static_cast<float>(cJSON_GetNumberValue(cJSON_GetObjectItem(current, "temperature_2m"))),
+        .feels = static_cast<float>(cJSON_GetNumberValue(cJSON_GetObjectItem(current, "apparent_temperature"))),
+        .humidity = static_cast<float>(cJSON_GetNumberValue(cJSON_GetObjectItem(current, "relative_humidity_2m"))),
+        .wind_speed = static_cast<float>(cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_speed_10m"))),
+        .wind_gusts = static_cast<float>(cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_gusts_10m"))),
         .wind_dir = wind_names[wind_sector],
-        .pressure = (float)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "pressure_msl")),
-        .code = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "weather_code")),
-        .is_day = (bool)(int)cJSON_GetNumberValue(cJSON_GetObjectItem(current, "is_day")),
+        .pressure = static_cast<float>(cJSON_GetNumberValue(cJSON_GetObjectItem(current, "pressure_msl"))),
+        .code = static_cast<int>(cJSON_GetNumberValue(cJSON_GetObjectItem(current, "weather_code"))),
+        .is_day = static_cast<int>(cJSON_GetNumberValue(cJSON_GetObjectItem(current, "is_day"))) != 0,
         .last_update = xTaskGetTickCount(),
     };
 
@@ -178,7 +181,7 @@ static void weather_fetch_and_parse(void)
 #define AIO_URL "https://io.adafruit.com/api/v2/" CONFIG_PWS_ADAFRUIT_IO_USER \
     "/feeds/" CONFIG_PWS_ADAFRUIT_IO_CO2_FEED_KEY "/data/last"
 
-static void adafruit_fetch(void)
+static void adafruit_fetch()
 {
     static char buf[1024];
     http_buf_t resp = {.buf = buf, .len = 0, .cap = sizeof(buf)};
@@ -209,12 +212,12 @@ static void adafruit_fetch(void)
 #define AIO_PUBLISH_URL "https://io.adafruit.com/api/v2/" CONFIG_PWS_ADAFRUIT_IO_USER \
     "/feeds/" CONFIG_PWS_ADAFRUIT_IO_PUBLISH_JSON_FEED "/data"
 
-static void adafruit_publish_ruuvi(void)
+static void adafruit_publish_ruuvi()
 {
     if (g_ruuvi_data.last_update == 0) return;
 
     char body[100];
-    snprintf(body, sizeof(body), "{\"value\":{\"temperature\":%.1f,\"pressure\":%.0f,\"humidity\":%.2f}}",
+    snprintf(body, sizeof(body), R"({"value":{"temperature":%.1f,"pressure":%.0f,"humidity":%.2f}})",
              g_ruuvi_data.temperature, g_ruuvi_data.pressure_mmhg, g_ruuvi_data.humidity);
 
     web_or_adafruit_io_access(AIO_PUBLISH_URL, true, body, "Ruuvi publish to " CONFIG_PWS_ADAFRUIT_IO_PUBLISH_JSON_FEED,
@@ -237,17 +240,22 @@ static void adafruit_publish_ruuvi(void)
     "/feeds/" CONFIG_PWS_ADAFRUIT_IO_CHART_FEED \
     "/data/chart?hours=48&resolution=30&field=avg"
 
-#define AIO_CHART_BUF_SIZE 8192
 
-static void adafruit_io_chart_fetch(void)
+static void adafruit_io_chart_fetch()
 {
-    static char buf[AIO_CHART_BUF_SIZE];
+    static char *buf = nullptr;
+    if (!buf) buf = static_cast<char*>(heap_caps_malloc(AIO_CHART_BUF_SIZE, MALLOC_CAP_SPIRAM));
+    if (!buf)
+    {
+        ESP_LOGE(WEB_TAG, "Cant allocate chart buffer");
+        abort();
+    }
 
     http_buf_t resp = {.buf = buf, .len = 0, .cap = AIO_CHART_BUF_SIZE};
     const bool success = web_or_adafruit_io_access(AIO_CHART_URL, true, nullptr,
                                                    "AIO chart fetch", &resp, http_event_handler);
     if (!success) return;
-    ESP_LOGI(AIO_TAG, "AIO chart: received %d bytes", (int)resp.len);
+    ESP_LOGI(AIO_TAG, "AIO chart: received %d bytes", static_cast<int>(resp.len));
 
     cJSON* root = cJSON_Parse(buf);
     if (!root)
@@ -280,7 +288,7 @@ static void adafruit_io_chart_fetch(void)
         }
         else if (cJSON_IsNumber(val))
         {
-            g_aio_chart[total++] = (float)cJSON_GetNumberValue(val);
+            g_aio_chart[total++] = static_cast<float>(cJSON_GetNumberValue(val));
         }
     }
 
@@ -290,7 +298,7 @@ static void adafruit_io_chart_fetch(void)
     ESP_LOGI(AIO_TAG, "Chart: %d entries", total);
 }
 
-static void adafruit_publish_pressure(void)
+static void adafruit_publish_pressure()
 {
     if (sizeof(CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED) <= 1)
     {
@@ -306,7 +314,7 @@ static void adafruit_publish_pressure(void)
     }
 
     char body[64];
-    snprintf(body, sizeof(body), "{\"value\":\"%.2f\"}", g_ruuvi_data.pressure_mmhg);
+    snprintf(body, sizeof(body), R"({"value":"%.2f"})", g_ruuvi_data.pressure_mmhg);
 
     if (web_or_adafruit_io_access(AIO_PRESSURE_URL, true, body, "Pressure publish", nullptr,
                                   nullptr))
@@ -318,6 +326,9 @@ static void adafruit_publish_pressure(void)
 
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num;
+
+extern "C" {
+extern const wifi_config_t wifi_config;
 
 static void event_handler(void* arg, esp_event_base_t event_base,
                           int32_t event_id, void* event_data)
@@ -334,14 +345,15 @@ static void event_handler(void* arg, esp_event_base_t event_base,
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
     {
-        ip_event_got_ip_t* event = (ip_event_got_ip_t*)event_data;
+        auto* event = static_cast<ip_event_got_ip_t*>(event_data);
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
+}
 
-void wifi_init_sta(void)
+static void wifi_init_sta()
 {
     s_wifi_event_group = xEventGroupCreate();
 
@@ -355,18 +367,11 @@ void wifi_init_sta(void)
     esp_event_handler_instance_t instance_any_id;
     esp_event_handler_instance_t instance_got_ip;
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
-        WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, &instance_any_id));
+        WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, nullptr, &instance_any_id));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
-        IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL, &instance_got_ip));
-
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = CONFIG_PWS_WIFI_SSID,
-            .password = CONFIG_PWS_WIFI_PASSWORD,
-        },
-    };
+        IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, nullptr, &instance_got_ip));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, const_cast<wifi_config_t*>(&wifi_config)));
     ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_LOGI(TAG, "Connecting to '%s'...", CONFIG_PWS_WIFI_SSID);
@@ -388,7 +393,7 @@ void wifi_init_sta(void)
 /*-----------------------------------------------------------------------
  * FreeRTOS task — fetches weather periodically
  *---------------------------------------------------------------------*/
-_Noreturn void wifi_task(void* arg)
+[[noreturn]] void wifi_task(void* arg)
 {
     (void)arg;
     wifi_init_sta();
