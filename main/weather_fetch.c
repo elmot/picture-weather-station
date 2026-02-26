@@ -22,7 +22,8 @@ static_assert(sizeof(CONFIG_PWS_WIFI_PASSWORD) > 1, "WiFi password can not be em
               "Define CONFIG_PWS_WIFI_PASSWORD via `idf.py menuconfig` or in `skdconfig.secrets` file");
 
 static const char* TAG = "wifi";
-static const char* ADAFRUIT_TAG = "adafruit_io";
+static const char* WEB_TAG = "WEB";
+static const char* AIO_TAG = "AdafruitIO";
 QueueHandle_t g_meteo_queue;
 volatile adafruit_data_t g_adafruit = {.value = NAN, .last_update = 0};
 
@@ -70,7 +71,7 @@ static esp_err_t http_event_handler(esp_http_client_event_t* evt)
  * Common http helper
  *---------------------------------------------------------------------*/
 static bool web_or_adafruit_io_access(const char* url,
-                                      const char* adafruit_io_key,
+                                      bool adafruit_io_key,
                                       const char* body,
                                       const char* label, http_buf_t* response,
                                       http_event_handle_cb http_cb)
@@ -86,11 +87,11 @@ static bool web_or_adafruit_io_access(const char* url,
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (client == nullptr)
     {
-        ESP_LOGE(TAG, "HTTP client init error");
+        ESP_LOGE(WEB_TAG, "HTTP client init error");
         return false;
     }
 
-    if (adafruit_io_key != nullptr)
+    if (adafruit_io_key)
     {
         esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
     }
@@ -107,12 +108,12 @@ static bool web_or_adafruit_io_access(const char* url,
 
     if (err != ESP_OK)
     {
-        ESP_LOGE(ADAFRUIT_TAG, "%s failed: %s", label, esp_err_to_name(err));
+        ESP_LOGE(adafruit_io_key? AIO_TAG :WEB_TAG, "%s failed: %s", label, esp_err_to_name(err));
         return false;
     }
     if (status != 200 && status != 201)
     {
-        ESP_LOGW(ADAFRUIT_TAG, "%s HTTP status %d", label, status);
+        ESP_LOGW(adafruit_io_key? AIO_TAG :WEB_TAG, "%s HTTP status %d", label, status);
         return false;
     }
     return true;
@@ -129,14 +130,17 @@ static void weather_fetch_and_parse(void)
     static char buf[MAX_RESPONSE_SIZE];
 
     http_buf_t resp = {.buf = buf, .len = 0, .cap = MAX_RESPONSE_SIZE};
-    web_or_adafruit_io_access(WEATHER_URL,nullptr, nullptr, "Weather fetch", &resp, http_event_handler);
+    if (!web_or_adafruit_io_access(WEATHER_URL, false, nullptr, "Weather fetch", &resp, http_event_handler))
+    {
+        return;
+    }
 
     cJSON* root = cJSON_Parse(resp.buf);
     const cJSON* current = cJSON_GetObjectItem(root, "current");
 
     if (!current)
     {
-        ESP_LOGE(TAG, "JSON parse error");
+        ESP_LOGE(WEB_TAG, "JSON parse error");
         cJSON_Delete(root);
         return;
     }
@@ -161,10 +165,10 @@ static void weather_fetch_and_parse(void)
 
     xQueueOverwrite(g_meteo_queue, &meteo);
 
-    ESP_LOGI(TAG, "Weather Code: %d", meteo.code);
-    ESP_LOGI(TAG, "Temperature: %.1f C", meteo.temp);
-    ESP_LOGI(TAG, "Humidity: %.0f%%", meteo.humidity);
-    ESP_LOGI(TAG, "Wind: %s  %.1f m/s (gusts: %.1f m/s)",
+    ESP_LOGI(WEB_TAG, "Weather Code: %d", meteo.code);
+    ESP_LOGI(WEB_TAG, "Temperature: %.1f C", meteo.temp);
+    ESP_LOGI(WEB_TAG, "Humidity: %.0f%%", meteo.humidity);
+    ESP_LOGI(WEB_TAG, "Wind: %s  %.1f m/s (gusts: %.1f m/s)",
              meteo.wind_dir, meteo.wind_speed, meteo.wind_gusts);
 }
 
@@ -178,12 +182,13 @@ static void adafruit_fetch(void)
 {
     static char buf[1024];
     http_buf_t resp = {.buf = buf, .len = 0, .cap = sizeof(buf)};
-    const bool success = web_or_adafruit_io_access(AIO_URL, CONFIG_PWS_ADAFRUIT_IO_KEY, nullptr, "Adafruit fetch", &resp, http_event_handler);
+    const bool success = web_or_adafruit_io_access(AIO_URL, true, nullptr, "Adafruit fetch",
+                                                   &resp, http_event_handler);
     if (!success) return;
     cJSON* root = cJSON_Parse(resp.buf);
     if (!root)
     {
-        ESP_LOGE(ADAFRUIT_TAG, "Adafruit IO JSON parse error");
+        ESP_LOGE(AIO_TAG, "Adafruit IO JSON parse error");
         return;
     }
 
@@ -192,7 +197,7 @@ static void adafruit_fetch(void)
     {
         g_adafruit.value = strtof(value_str, nullptr);
         g_adafruit.last_update = xTaskGetTickCount();
-        ESP_LOGI(ADAFRUIT_TAG, "Adafruit IO: %s = %.2f", CONFIG_PWS_ADAFRUIT_IO_CO2_FEED_KEY, g_adafruit.value);
+        ESP_LOGI(AIO_TAG, "Adafruit IO: %s = %.2f", CONFIG_PWS_ADAFRUIT_IO_CO2_FEED_KEY, g_adafruit.value);
     }
 
     cJSON_Delete(root);
@@ -212,8 +217,9 @@ static void adafruit_publish_ruuvi(void)
     snprintf(body, sizeof(body), "{\"value\":{\"temperature\":%.1f,\"pressure\":%.0f,\"humidity\":%.2f}}",
              g_ruuvi_data.temperature, g_ruuvi_data.pressure_mmhg, g_ruuvi_data.humidity);
 
-    web_or_adafruit_io_access(AIO_PUBLISH_URL, CONFIG_PWS_ADAFRUIT_IO_KEY, body, "Ruuvi publish to " CONFIG_PWS_ADAFRUIT_IO_PUBLISH_JSON_FEED, nullptr,
-                       nullptr);
+    web_or_adafruit_io_access(AIO_PUBLISH_URL, true, body, "Ruuvi publish to " CONFIG_PWS_ADAFRUIT_IO_PUBLISH_JSON_FEED,
+                              nullptr,
+                              nullptr);
 }
 
 /*-----------------------------------------------------------------------
@@ -238,21 +244,22 @@ static void adafruit_io_chart_fetch(void)
     static char buf[AIO_CHART_BUF_SIZE];
 
     http_buf_t resp = {.buf = buf, .len = 0, .cap = AIO_CHART_BUF_SIZE};
-    const bool success = web_or_adafruit_io_access(AIO_CHART_URL, CONFIG_PWS_ADAFRUIT_IO_KEY, nullptr, "AIO chart fetch", &resp, http_event_handler);
+    const bool success = web_or_adafruit_io_access(AIO_CHART_URL, true, nullptr,
+                                                   "AIO chart fetch", &resp, http_event_handler);
     if (!success) return;
-    ESP_LOGI(ADAFRUIT_TAG, "AIO chart: received %d bytes", (int)resp.len);
+    ESP_LOGI(AIO_TAG, "AIO chart: received %d bytes", (int)resp.len);
 
     cJSON* root = cJSON_Parse(buf);
     if (!root)
     {
-        ESP_LOGE(ADAFRUIT_TAG, "AIO chart: JSON parse error");
+        ESP_LOGE(AIO_TAG, "AIO chart: JSON parse error");
         return;
     }
 
     cJSON* data_arr = cJSON_GetObjectItem(root, "data");
     if (!data_arr || !cJSON_IsArray(data_arr))
     {
-        ESP_LOGE(ADAFRUIT_TAG, "AIO chart: missing 'data' array");
+        ESP_LOGE(AIO_TAG, "AIO chart: missing 'data' array");
         cJSON_Delete(root);
         return;
     }
@@ -280,30 +287,31 @@ static void adafruit_io_chart_fetch(void)
     cJSON_Delete(root);
 
     g_aio_chart_count = total;
-    ESP_LOGI(ADAFRUIT_TAG, "Chart: %d entries", total);
+    ESP_LOGI(AIO_TAG, "Chart: %d entries", total);
 }
 
 static void adafruit_publish_pressure(void)
 {
     if (sizeof(CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED) <= 1)
     {
-        ESP_LOGW(ADAFRUIT_TAG, "Pressure feed key not configured, skipping publish");
+        ESP_LOGW(AIO_TAG, "Pressure feed key not configured, skipping publish");
         // ReSharper disable once CppDFAUnreachableCode
         return;
     }
     if (g_ruuvi_data.last_update == 0 ||
         pdTICKS_TO_MS(xTaskGetTickCount() - g_ruuvi_data.last_update) > (1000 * 60 * 60))
     {
-        ESP_LOGW(ADAFRUIT_TAG, "Ruuvi pressure data unavailable or too old, skipping publish");
+        ESP_LOGW(AIO_TAG, "Ruuvi pressure data unavailable or too old, skipping publish");
         return;
     }
 
     char body[64];
     snprintf(body, sizeof(body), "{\"value\":\"%.2f\"}", g_ruuvi_data.pressure_mmhg);
 
-    if (web_or_adafruit_io_access(AIO_PRESSURE_URL, CONFIG_PWS_ADAFRUIT_IO_KEY, body, "Pressure publish", nullptr, nullptr))
+    if (web_or_adafruit_io_access(AIO_PRESSURE_URL, true, body, "Pressure publish", nullptr,
+                                  nullptr))
     {
-        ESP_LOGI(ADAFRUIT_TAG, "Published pressure %.2f mmHg to feed '%s'",
+        ESP_LOGI(AIO_TAG, "Published pressure %.2f mmHg to feed '%s'",
                  g_ruuvi_data.pressure_mmhg, CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED);
     }
 }
