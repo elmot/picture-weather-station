@@ -21,7 +21,7 @@ typedef struct
     TickType_t last_update;
 } ruuvi_data_t;
 
-extern volatile ruuvi_data_t g_ruuvi_data;
+void pushRuuviData(const ruuvi_data_t* data);
 
 /*-----------------------------------------------------------------------
  * Internet weather (open-meteo)
@@ -55,14 +55,16 @@ typedef struct
     TickType_t last_update;
 } adafruit_data_t;
 
-extern volatile adafruit_data_t g_adafruit;
-
 /*-----------------------------------------------------------------------
  * Adafruit IO chart data
  *---------------------------------------------------------------------*/
 #define AIO_CHART_MAX 96
-extern float g_aio_chart[AIO_CHART_MAX];
-extern volatile int g_aio_chart_count;
+
+typedef struct
+{
+    float values[AIO_CHART_MAX];
+    int count;
+} chart_data_t;
 
 #ifdef __cplusplus
 }

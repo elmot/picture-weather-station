@@ -17,6 +17,18 @@ void ruuvi_task_init(void);
 }
 void wifi_task(void*);
 
+/*-----------------------------------------------------------------------
+ * Mutex-protected shared data (SensorHistory<T,1> = single-slot)
+ *---------------------------------------------------------------------*/
+SensorHistory<ruuvi_data_t, 1> g_ruuvi_history{};
+SensorHistory<adafruit_data_t, 1> g_adafruit_history{};
+SensorHistory<chart_data_t, 1> g_chart_history{};
+
+extern "C" void pushRuuviData(const ruuvi_data_t* data)
+{
+    g_ruuvi_history.push(*data);
+}
+
 static const char* TAG = "picture-ws";
 
 bool isDataExpired(const TickType_t last_update)
@@ -76,7 +88,7 @@ extern "C" void app_main(void)
     auto ui = WeatherStation::create();
     ChartSupportCode<WeatherStation, ChartSupport>(ui).setup();
 
-    /* Periodic timer: poll volatile globals and push data into Slint properties */
+    /* Periodic timer: read shared data and push into Slint properties */
     slint::Timer timer(std::chrono::milliseconds(1000),
                        [&ui]()
                        {
@@ -112,32 +124,39 @@ extern "C" void app_main(void)
                                return reading.temperature;
                            });
                            const auto tempHistory = std::make_shared<slint::VectorModel<float>>(data);
+                           const auto last = g_aht20_history.last();
                            ui->set_indoor_data(LocalData{
-                               .tempC = g_aht20_history.last().temperature,
-                               .relHumidity = g_aht20_history.last().humidity,
+                               .tempC = last.temperature,
+                               .relHumidity = last.humidity,
                                .tempHistory = tempHistory,
                            });
 
                            /* Ruuvi tag */
-                           ui->set_roovi_data(RuuviData{
-                               .tempC = g_ruuvi_data.temperature,
-                               .atmPHgmm = g_ruuvi_data.pressure_mmhg,
-                               .relHumidity = g_ruuvi_data.humidity,
-                               .connFail = isDataExpired(g_ruuvi_data.last_update),
-                               .battV = g_ruuvi_data.battery_voltage,
-                           });
+                           {
+                               auto ruuvi = g_ruuvi_history.last();
+                               ui->set_roovi_data(RuuviData{
+                                   .tempC = ruuvi.temperature,
+                                   .atmPHgmm = ruuvi.pressure_mmhg,
+                                   .relHumidity = ruuvi.humidity,
+                                   .connFail = isDataExpired(ruuvi.last_update),
+                                   .battV = ruuvi.battery_voltage,
+                               });
+                           }
 
                            /* Adafruit IO */
-                           ui->set_adafruit_data({
-                               .value = static_cast<float>(g_adafruit.value),
-                               .connFail = isDataExpired(g_adafruit.last_update)
-                           });
+                           {
+                               auto aio = g_adafruit_history.last();
+                               ui->set_adafruit_data({
+                                   .value = aio.value,
+                                   .connFail = isDataExpired(aio.last_update)
+                               });
+                           }
 
                            /* AIO chart */
                            {
-                               int count = g_aio_chart_count;
-                               std::vector<float> cv(g_aio_chart,
-                                                     g_aio_chart + count);
+                               auto chart = g_chart_history.last();
+                               std::vector<float> cv(chart.values,
+                                                     chart.values + chart.count);
                                ui->set_chart_history(
                                    std::make_shared<slint::VectorModel<float>>(cv));
                            }

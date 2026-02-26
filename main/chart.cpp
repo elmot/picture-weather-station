@@ -103,6 +103,10 @@ slint::Image ChartSupportCodeBase::render_chart(const int w, const int h,
 
 std::shared_ptr<slint::Model<float>> ChartSupportCodeBase::calcBounds(const std::shared_ptr<slint::Model<float>>& data)
 {
+    if (data == nullptr)
+    {
+        return {};
+    }
     const unsigned int count = data->row_count();
     if (count == 0)
     {

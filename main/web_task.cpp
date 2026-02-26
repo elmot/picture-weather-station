@@ -7,6 +7,7 @@
 #include "esp_crt_bundle.h"
 #include "cJSON.h"
 #include "datastreams.h"
+#include "sensor_history.h"
 #include "freertos/queue.h"
 #include "freertos/event_groups.h"
 #include "esp_wifi.h"
@@ -16,7 +17,7 @@
 constexpr uint32_t WIFI_CONNECTED_BIT = BIT0;
 constexpr uint32_t WIFI_FAIL_BIT = BIT1;
 
-constexpr size_t  HTTP_BUF_SIZE = 8192;
+constexpr size_t HTTP_BUF_SIZE = 8192;
 
 static_assert(sizeof(CONFIG_PWS_WIFI_SSID) > 1, "WiFi SSID can not be empty. "
               "Define CONFIG_PWS_WIFI_SSID via `idf.py menuconfig` or in `skdconfig.secrets` file");
@@ -28,12 +29,11 @@ constexpr const char* TAG = "wifi";
 constexpr const char* WEB_TAG = "WEB";
 constexpr const char* AIO_TAG = "AdafruitIO";
 QueueHandle_t g_meteo_queue;
-volatile adafruit_data_t g_adafruit = {.value = NAN, .last_update = 0};
+extern SensorHistory<ruuvi_data_t, 1> g_ruuvi_history;
+extern SensorHistory<adafruit_data_t, 1> g_adafruit_history;
+extern SensorHistory<chart_data_t, 1> g_chart_history;
 
-float g_aio_chart[AIO_CHART_MAX];
-volatile int g_aio_chart_count = 0;
-
-constexpr uint32_t  FETCH_INTERVAL_MS = 5 * 60 * 1000; /* 5 min */
+constexpr uint32_t FETCH_INTERVAL_MS = 5 * 60 * 1000; /* 5 min */
 
 
 #define WEATHER_HOST "https://api.open-meteo.com"
@@ -72,13 +72,15 @@ public:
         return p_;
     }
 
-    constexpr size_t cap() { return CAPACITY; }
+    static constexpr size_t cap() { return CAPACITY; }
 
-    template <typename... Args>
-    char const * sprintf(const char* format, Args... args)
+    char const* sprintf(const char* format, ...)
     {
-        char *p = get();
-        snprintf(p, CAPACITY, format, args...);
+        char* p = get();
+        va_list args;
+        va_start(args, format);
+        vsnprintf(p, CAPACITY, format, args);
+        va_end(args);
         return p;
     }
 };
@@ -162,6 +164,13 @@ static bool web_or_adafruit_io_access(const char* url,
  *---------------------------------------------------------------------*/
 constexpr const char* wind_names[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
 
+static int cJsonGetInt(const cJSON* current, const char* key, int def = 0)
+{
+    const auto item = cJSON_GetObjectItem(current, key);
+
+    return cJSON_IsNumber(item) ? item->valueint : def;
+}
+
 static void weather_fetch_and_parse()
 {
     http_buf_t resp = {.buf = s_http_buf.get(), .len = 0, .cap = s_http_buf.cap()};
@@ -180,7 +189,7 @@ static void weather_fetch_and_parse()
         return;
     }
 
-    const int wind_dir_deg = static_cast<int>(cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_direction_10m")));
+    const int wind_dir_deg = cJsonGetInt(current, "wind_direction_10m", 0);
     const unsigned int wind_sector = ((wind_dir_deg + 22) % 360 / 45) % 8;
 
     meteo_data_t meteo = {
@@ -191,8 +200,8 @@ static void weather_fetch_and_parse()
         .wind_gusts = static_cast<float>(cJSON_GetNumberValue(cJSON_GetObjectItem(current, "wind_gusts_10m"))),
         .wind_dir = wind_names[wind_sector],
         .pressure = static_cast<float>(cJSON_GetNumberValue(cJSON_GetObjectItem(current, "pressure_msl"))),
-        .code = static_cast<int>(cJSON_GetNumberValue(cJSON_GetObjectItem(current, "weather_code"))),
-        .is_day = static_cast<int>(cJSON_GetNumberValue(cJSON_GetObjectItem(current, "is_day"))) != 0,
+        .code = cJsonGetInt(current, "weather_code", -1),
+        .is_day = cJsonGetInt(current, "is_day") != 0,
         .last_update = xTaskGetTickCount(),
     };
 
@@ -228,9 +237,9 @@ static void adafruit_fetch()
 
     if (const char* value_str = cJSON_GetStringValue(cJSON_GetObjectItem(root, "value")))
     {
-        g_adafruit.value = strtof(value_str, nullptr);
-        g_adafruit.last_update = xTaskGetTickCount();
-        ESP_LOGI(AIO_TAG, "Adafruit IO: %s = %.2f", CONFIG_PWS_ADAFRUIT_IO_CO2_FEED_KEY, g_adafruit.value);
+        float val = strtof(value_str, nullptr);
+        g_adafruit_history.push({val, xTaskGetTickCount()});
+        ESP_LOGI(AIO_TAG, "Adafruit IO: %s = %.2f", CONFIG_PWS_ADAFRUIT_IO_CO2_FEED_KEY, val);
     }
 
     cJSON_Delete(root);
@@ -244,10 +253,11 @@ static void adafruit_fetch()
 
 static void adafruit_publish_ruuvi()
 {
-    if (g_ruuvi_data.last_update == 0) return;
+    auto ruuvi = g_ruuvi_history.last();
+    if (ruuvi.last_update == 0) return;
 
-    char const * body = s_http_buf.sprintf(R"({"value":{"temperature":%.1f,"pressure":%.0f,"humidity":%.2f}})",
-                     g_ruuvi_data.temperature, g_ruuvi_data.pressure_mmhg, g_ruuvi_data.humidity);
+    char const* body = s_http_buf.sprintf(R"({"value":"{\"temperature\":%.1f,\"pressure\":%.0f,\"humidity\":%.2f}"})",
+                                          ruuvi.temperature, ruuvi.pressure_mmhg, ruuvi.humidity);
 
     web_or_adafruit_io_access(AIO_PUBLISH_URL, true, body, "Ruuvi publish to " CONFIG_PWS_ADAFRUIT_IO_PUBLISH_JSON_FEED,
                               nullptr,
@@ -294,28 +304,28 @@ static void adafruit_io_chart_fetch()
     }
 
     /* Each element is [timestamp_str, value_str] — already chronological */
-    int total = 0;
+    chart_data_t chart{};
     cJSON const* row;
     cJSON_ArrayForEach(row, data_arr)
     {
-        if (total >= AIO_CHART_MAX) break;
+        if (chart.count >= AIO_CHART_MAX) break;
         if (!cJSON_IsArray(row)) continue;
         cJSON* val = cJSON_GetArrayItem(row, 1);
         if (!val) continue;
         if (const char* s = cJSON_GetStringValue(val))
         {
-            g_aio_chart[total++] = strtof(s, nullptr);
+            chart.values[chart.count++] = strtof(s, nullptr);
         }
         else if (cJSON_IsNumber(val))
         {
-            g_aio_chart[total++] = static_cast<float>(cJSON_GetNumberValue(val));
+            chart.values[chart.count++] = static_cast<float>(cJSON_GetNumberValue(val));
         }
     }
 
     cJSON_Delete(root);
 
-    g_aio_chart_count = total;
-    ESP_LOGI(AIO_TAG, "Chart: %d entries", total);
+    g_chart_history.push(chart);
+    ESP_LOGI(AIO_TAG, "Chart: %d entries", chart.count);
 }
 
 static void adafruit_publish_pressure()
@@ -326,20 +336,21 @@ static void adafruit_publish_pressure()
         // ReSharper disable once CppDFAUnreachableCode
         return;
     }
-    if (g_ruuvi_data.last_update == 0 ||
-        pdTICKS_TO_MS(xTaskGetTickCount() - g_ruuvi_data.last_update) > (1000 * 60 * 60))
+    auto ruuvi = g_ruuvi_history.last();
+    if (ruuvi.last_update == 0 ||
+        pdTICKS_TO_MS(xTaskGetTickCount() - ruuvi.last_update) > (1000 * 60 * 60))
     {
         ESP_LOGW(AIO_TAG, "Ruuvi pressure data unavailable or too old, skipping publish");
         return;
     }
 
-    char const* body = s_http_buf.sprintf(R"({"value":"%.2f"})", g_ruuvi_data.pressure_mmhg);
+    char const* body = s_http_buf.sprintf(R"({"value":"%.2f"})", ruuvi.pressure_mmhg);
 
     if (web_or_adafruit_io_access(AIO_PRESSURE_URL, true, body, "Pressure publish", nullptr,
                                   nullptr))
     {
         ESP_LOGI(AIO_TAG, "Published pressure %.2f mmHg to feed '%s'",
-                 g_ruuvi_data.pressure_mmhg, CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED);
+                 ruuvi.pressure_mmhg, CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED);
     }
 }
 

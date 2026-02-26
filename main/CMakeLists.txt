@@ -4,7 +4,7 @@
                     hw_support.c
                     aht20_task.c
                     ruuvi_task.c
-                    weather_fetch.cpp
+                    web_task.cpp
                     chart.cpp
                     wifi_helper.c
                  INCLUDE_DIRS "."

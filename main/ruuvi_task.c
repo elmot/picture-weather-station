@@ -22,7 +22,6 @@ static const char* TAG = "ruuvi";
 #pragma GCC diagnostic pop
 #endif
 
-volatile ruuvi_data_t g_ruuvi_data;
 
 /*-----------------------------------------------------------------------
  * Parse Ruuvi Data Format 5 (RAWv2) — 24-byte payload
@@ -92,7 +91,7 @@ static int ble_gap_event_cb(struct ble_gap_event* event, void* arg)
     ruuvi_data_t parsed;
     if (parse_ruuvi_df5(payload, payload_len, &parsed))
     {
-        g_ruuvi_data = parsed;
+        pushRuuviData(&parsed);
         ESP_LOGI(TAG, "Ruuvi: %.1f C, %.1f %%RH, %.1f mmHg, %.2f V, MAC: %02X:%02X:%02X:%02X:%02X:%02X",
                  parsed.temperature, parsed.humidity,
                  parsed.pressure_mmhg, parsed.battery_voltage,
