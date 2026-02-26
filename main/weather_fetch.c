@@ -11,7 +11,6 @@
 #include "freertos/event_groups.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
-#include "esp_heap_caps.h"
 
 #define WIFI_CONNECTED_BIT  BIT0
 #define WIFI_FAIL_BIT       BIT1
@@ -23,6 +22,7 @@ static_assert(sizeof(CONFIG_PWS_WIFI_PASSWORD) > 1, "WiFi password can not be em
               "Define CONFIG_PWS_WIFI_PASSWORD via `idf.py menuconfig` or in `skdconfig.secrets` file");
 
 static const char* TAG = "wifi";
+static const char* ADAFRUIT_TAG = "adafruit_io";
 QueueHandle_t g_meteo_queue;
 volatile adafruit_data_t g_adafruit = {.value = NAN, .last_update = 0};
 
@@ -65,6 +65,60 @@ static esp_err_t http_event_handler(esp_http_client_event_t* evt)
     return ESP_OK;
 }
 
+
+/*-----------------------------------------------------------------------
+ * Common http helper
+ *---------------------------------------------------------------------*/
+static bool web_or_adafruit_io_access(const char* url,
+                                      const char* adafruit_io_key,
+                                      const char* body,
+                                      const char* label, http_buf_t* response,
+                                      http_event_handle_cb http_cb)
+{
+    esp_http_client_config_t config = {
+        .url = url,
+        .method = body == nullptr ? HTTP_METHOD_GET : HTTP_METHOD_POST,
+        .user_data = response,
+        .event_handler = http_cb,
+        .timeout_ms = 10000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (client == nullptr)
+    {
+        ESP_LOGE(TAG, "HTTP client init error");
+        return false;
+    }
+
+    if (adafruit_io_key != nullptr)
+    {
+        esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
+    }
+
+    if (body != nullptr)
+    {
+        esp_http_client_set_header(client, "Content-Type", "application/json");
+        esp_http_client_set_post_field(client, body, (int)strlen(body));
+    }
+
+    esp_err_t err = esp_http_client_perform(client);
+    int status = esp_http_client_get_status_code(client);
+    esp_http_client_cleanup(client);
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(ADAFRUIT_TAG, "%s failed: %s", label, esp_err_to_name(err));
+        return false;
+    }
+    if (status != 200 && status != 201)
+    {
+        ESP_LOGW(ADAFRUIT_TAG, "%s HTTP status %d", label, status);
+        return false;
+    }
+    return true;
+}
+
+
 /*-----------------------------------------------------------------------
  * Fetch JSON from URL and parse with cJSON
  *---------------------------------------------------------------------*/
@@ -75,36 +129,7 @@ static void weather_fetch_and_parse(void)
     static char buf[MAX_RESPONSE_SIZE];
 
     http_buf_t resp = {.buf = buf, .len = 0, .cap = MAX_RESPONSE_SIZE};
-
-    const esp_http_client_config_t config = {
-        .url = WEATHER_URL,
-        .event_handler = http_event_handler,
-        .user_data = &resp,
-        .timeout_ms = 10000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (client == nullptr) return;
-
-    const esp_err_t err = esp_http_client_perform(client);
-    const int status = esp_http_client_get_status_code(client);
-    esp_http_client_cleanup(client);
-
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG, "HTTP request failed: %s", esp_err_to_name(err));
-
-        return;
-    }
-
-    if (status != 200)
-    {
-        ESP_LOGW(TAG, "HTTP status %d", status);
-
-        return;
-    }
-
-    ESP_LOGI(TAG, "Received %d bytes from %s", (int)resp.len, WEATHER_HOST);
+    web_or_adafruit_io_access(WEATHER_URL,nullptr, nullptr, "Weather fetch", &resp, http_event_handler);
 
     cJSON* root = cJSON_Parse(resp.buf);
     const cJSON* current = cJSON_GetObjectItem(root, "current");
@@ -153,37 +178,12 @@ static void adafruit_fetch(void)
 {
     static char buf[1024];
     http_buf_t resp = {.buf = buf, .len = 0, .cap = sizeof(buf)};
-
-    esp_http_client_config_t config = {
-        .url = AIO_URL,
-        .event_handler = http_event_handler,
-        .user_data = &resp,
-        .timeout_ms = 10000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (client == nullptr) return;
-    esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
-
-    esp_err_t err = esp_http_client_perform(client);
-    int status = esp_http_client_get_status_code(client);
-    esp_http_client_cleanup(client);
-
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Adafruit IO request failed: %s", esp_err_to_name(err));
-        return;
-    }
-    if (status != 200)
-    {
-        ESP_LOGW(TAG, "Adafruit IO HTTP status %d", status);
-        return;
-    }
-
+    const bool success = web_or_adafruit_io_access(AIO_URL, CONFIG_PWS_ADAFRUIT_IO_KEY, nullptr, "Adafruit fetch", &resp, http_event_handler);
+    if (!success) return;
     cJSON* root = cJSON_Parse(resp.buf);
     if (!root)
     {
-        ESP_LOGE(TAG, "Adafruit IO JSON parse error");
+        ESP_LOGE(ADAFRUIT_TAG, "Adafruit IO JSON parse error");
         return;
     }
 
@@ -192,7 +192,7 @@ static void adafruit_fetch(void)
     {
         g_adafruit.value = strtof(value_str, nullptr);
         g_adafruit.last_update = xTaskGetTickCount();
-        ESP_LOGI(TAG, "Adafruit IO: %s = %.2f", CONFIG_PWS_ADAFRUIT_IO_CO2_FEED_KEY, g_adafruit.value);
+        ESP_LOGI(ADAFRUIT_TAG, "Adafruit IO: %s = %.2f", CONFIG_PWS_ADAFRUIT_IO_CO2_FEED_KEY, g_adafruit.value);
     }
 
     cJSON_Delete(root);
@@ -208,42 +208,12 @@ static void adafruit_publish_ruuvi(void)
 {
     if (g_ruuvi_data.last_update == 0) return;
 
-    static  char body[100];
-    sniprintf(body, sizeof(body) - 1, "{\"value\":{\"temperature\":%.1f,\"pressure\":%.0f,\"humidity\":%.2f}",
-              g_ruuvi_data.temperature, g_ruuvi_data.pressure_mmhg, g_ruuvi_data.humidity);
-    esp_http_client_config_t config = {
-        .url = AIO_PUBLISH_URL,
-        .method = HTTP_METHOD_POST,
-        .timeout_ms = 10000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (client==nullptr)
-    {
-        cJSON_free(body);
-        return;
-    }
-    esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_post_field(client, body, (int)strlen(body));
+    char body[100];
+    snprintf(body, sizeof(body), "{\"value\":{\"temperature\":%.1f,\"pressure\":%.0f,\"humidity\":%.2f}}",
+             g_ruuvi_data.temperature, g_ruuvi_data.pressure_mmhg, g_ruuvi_data.humidity);
 
-    esp_err_t err = esp_http_client_perform(client);
-    int status = esp_http_client_get_status_code(client);
-    esp_http_client_cleanup(client);
-    cJSON_free(body);
-
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Adafruit IO publish failed: %s", esp_err_to_name(err));
-        return;
-    }
-    if (status != 200 && status != 201)
-    {
-        ESP_LOGW(TAG, "Adafruit IO publish HTTP status %d", status);
-        return;
-    }
-    ESP_LOGI(TAG, "Published Ruuvi data to Adafruit IO feed '%s'",
-             CONFIG_PWS_ADAFRUIT_IO_PUBLISH_JSON_FEED);
+    web_or_adafruit_io_access(AIO_PUBLISH_URL, CONFIG_PWS_ADAFRUIT_IO_KEY, body, "Ruuvi publish to " CONFIG_PWS_ADAFRUIT_IO_PUBLISH_JSON_FEED, nullptr,
+                       nullptr);
 }
 
 /*-----------------------------------------------------------------------
@@ -263,71 +233,33 @@ static void adafruit_publish_ruuvi(void)
 
 #define AIO_CHART_BUF_SIZE 8192
 
-static void aio_chart_fetch(void)
+static void adafruit_io_chart_fetch(void)
 {
-    char* buf = heap_caps_malloc(AIO_CHART_BUF_SIZE, MALLOC_CAP_SPIRAM);
-    if (!buf)
-    {
-        ESP_LOGE(TAG, "AIO chart: alloc failed");
-        return;
-    }
+    static char buf[AIO_CHART_BUF_SIZE];
 
     http_buf_t resp = {.buf = buf, .len = 0, .cap = AIO_CHART_BUF_SIZE};
-
-    esp_http_client_config_t config = {
-        .url = AIO_CHART_URL,
-        .event_handler = http_event_handler,
-        .user_data = &resp,
-        .timeout_ms = 15000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (client == nullptr)
-    {
-        free(buf);
-        return;
-    }
-    esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
-
-    esp_err_t err = esp_http_client_perform(client);
-    int status = esp_http_client_get_status_code(client);
-    esp_http_client_cleanup(client);
-
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG, "AIO chart fetch failed: %s", esp_err_to_name(err));
-        free(buf);
-        return;
-    }
-    if (status != 200)
-    {
-        ESP_LOGW(TAG, "AIO chart HTTP status %d", status);
-        free(buf);
-        return;
-    }
-
-    ESP_LOGI(TAG, "AIO chart: received %d bytes", (int)resp.len);
+    const bool success = web_or_adafruit_io_access(AIO_CHART_URL, CONFIG_PWS_ADAFRUIT_IO_KEY, nullptr, "AIO chart fetch", &resp, http_event_handler);
+    if (!success) return;
+    ESP_LOGI(ADAFRUIT_TAG, "AIO chart: received %d bytes", (int)resp.len);
 
     cJSON* root = cJSON_Parse(buf);
     if (!root)
     {
-        ESP_LOGE(TAG, "AIO chart: JSON parse error");
-        free(buf);
+        ESP_LOGE(ADAFRUIT_TAG, "AIO chart: JSON parse error");
         return;
     }
 
     cJSON* data_arr = cJSON_GetObjectItem(root, "data");
     if (!data_arr || !cJSON_IsArray(data_arr))
     {
-        ESP_LOGE(TAG, "AIO chart: missing 'data' array");
+        ESP_LOGE(ADAFRUIT_TAG, "AIO chart: missing 'data' array");
         cJSON_Delete(root);
-        free(buf);
         return;
     }
 
     /* Each element is [timestamp_str, value_str] — already chronological */
     int total = 0;
-    cJSON const * row;
+    cJSON const* row;
     cJSON_ArrayForEach(row, data_arr)
     {
         if (total >= AIO_CHART_MAX) break;
@@ -346,57 +278,34 @@ static void aio_chart_fetch(void)
     }
 
     cJSON_Delete(root);
-    free(buf);
 
     g_aio_chart_count = total;
-    ESP_LOGI(TAG, "AIO chart: %d entries", total);
+    ESP_LOGI(ADAFRUIT_TAG, "Chart: %d entries", total);
 }
 
 static void adafruit_publish_pressure(void)
 {
     if (sizeof(CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED) <= 1)
     {
-        ESP_LOGW(TAG, "Pressure feed key not configured, skipping publish");
+        ESP_LOGW(ADAFRUIT_TAG, "Pressure feed key not configured, skipping publish");
+        // ReSharper disable once CppDFAUnreachableCode
         return;
     }
     if (g_ruuvi_data.last_update == 0 ||
         pdTICKS_TO_MS(xTaskGetTickCount() - g_ruuvi_data.last_update) > (1000 * 60 * 60))
     {
-        ESP_LOGW(TAG, "Ruuvi pressure data unavailable or too old, skipping publish");
+        ESP_LOGW(ADAFRUIT_TAG, "Ruuvi pressure data unavailable or too old, skipping publish");
         return;
     }
 
     char body[64];
     snprintf(body, sizeof(body), "{\"value\":\"%.2f\"}", g_ruuvi_data.pressure_mmhg);
 
-    esp_http_client_config_t config = {
-        .url = AIO_PRESSURE_URL,
-        .method = HTTP_METHOD_POST,
-        .timeout_ms = 10000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (client==nullptr) return;
-    esp_http_client_set_header(client, "X-AIO-Key", CONFIG_PWS_ADAFRUIT_IO_KEY);
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_post_field(client, body, (int)strlen(body));
-
-    esp_err_t err = esp_http_client_perform(client);
-    int status = esp_http_client_get_status_code(client);
-    esp_http_client_cleanup(client);
-
-    if (err != ESP_OK)
+    if (web_or_adafruit_io_access(AIO_PRESSURE_URL, CONFIG_PWS_ADAFRUIT_IO_KEY, body, "Pressure publish", nullptr, nullptr))
     {
-        ESP_LOGE(TAG, "Pressure publish failed: %s", esp_err_to_name(err));
-        return;
+        ESP_LOGI(ADAFRUIT_TAG, "Published pressure %.2f mmHg to feed '%s'",
+                 g_ruuvi_data.pressure_mmhg, CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED);
     }
-    if (status != 200 && status != 201)
-    {
-        ESP_LOGW(TAG, "Pressure publish HTTP status %d", status);
-        return;
-    }
-    ESP_LOGI(TAG, "Published pressure %.2f mmHg to feed '%s'",
-             g_ruuvi_data.pressure_mmhg, CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED);
 }
 
 static EventGroupHandle_t s_wifi_event_group;
@@ -481,7 +390,7 @@ _Noreturn void wifi_task(void* arg)
         adafruit_fetch();
         adafruit_publish_ruuvi();
         adafruit_publish_pressure();
-        aio_chart_fetch();
+        adafruit_io_chart_fetch();
         vTaskDelay(pdMS_TO_TICKS(FETCH_INTERVAL_MS));
     }
 }
