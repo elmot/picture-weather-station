@@ -208,28 +208,9 @@ static void adafruit_publish_ruuvi(void)
 {
     if (g_ruuvi_data.last_update == 0) return;
 
-    cJSON* value_obj = cJSON_CreateObject();
-    if (value_obj == nullptr) return;
-    cJSON_AddNumberToObject(value_obj, "temperature", g_ruuvi_data.temperature);
-    cJSON_AddNumberToObject(value_obj, "pressure", g_ruuvi_data.pressure_mmhg);
-    cJSON_AddNumberToObject(value_obj, "humidity", g_ruuvi_data.humidity);
-    char* value_str = cJSON_PrintUnformatted(value_obj);
-    cJSON_Delete(value_obj);
-    if (value_str == nullptr) return;
-
-    cJSON* root = cJSON_CreateObject();
-    if (root == nullptr)
-    {
-        cJSON_free(value_str);
-        return;
-    }
-    cJSON_AddStringToObject(root, "value", value_str);
-    char* body = cJSON_PrintUnformatted(root);
-    cJSON_free(value_str);
-    cJSON_Delete(root);
-
-    if (!body) return;
-
+    static  char body[100];
+    sniprintf(body, sizeof(body) - 1, "{\"value\":{\"temperature\":%.1f,\"pressure\":%.0f,\"humidity\":%.2f}",
+              g_ruuvi_data.temperature, g_ruuvi_data.pressure_mmhg, g_ruuvi_data.humidity);
     esp_http_client_config_t config = {
         .url = AIO_PUBLISH_URL,
         .method = HTTP_METHOD_POST,
