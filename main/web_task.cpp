@@ -14,6 +14,9 @@
 #include "esp_event.h"
 #include "esp_heap_caps.h"
 #include "esp_heap_trace.h"
+#include "mbedtls/ctr_drbg.h"
+#include "mbedtls/entropy.h"
+#include "mbedtls/net_sockets.h"
 
 constexpr uint32_t WIFI_CONNECTED_BIT = BIT0;
 constexpr uint32_t WIFI_FAIL_BIT = BIT1;
@@ -89,10 +92,6 @@ public:
 
 static PsramBuf<HTTP_BUF_SIZE> s_http_buf;
 
-/* Heap trace: record buffer for standalone mode */
-constexpr size_t HEAP_TRACE_NUM_RECORDS = 200;
-static heap_trace_record_t s_heap_trace_records[HEAP_TRACE_NUM_RECORDS];
-
 extern "C" {
 static esp_err_t http_event_handler(esp_http_client_event_t* evt)
 {
@@ -149,6 +148,12 @@ static bool web_or_adafruit_io_access(const char* url,
     esp_err_t err = esp_http_client_perform(client);
     int status = esp_http_client_get_status_code(client);
     esp_http_client_cleanup(client);
+    // mbedtls_x509_crt_free(&tls->cacert);
+    // mbedtls_entropy_free(&tls->entropy);
+    // mbedtls_ssl_config_free(&tls->conf);
+    // mbedtls_ctr_drbg_free(&tls->ctr_drbg);
+    // mbedtls_ssl_free(&tls->ssl);
+    // mbedtls_net_free(&tls->server_fd);
 
     if (err != ESP_OK)
     {
@@ -433,37 +438,13 @@ static void wifi_init_sta()
     (void)arg;
     wifi_init_sta();
 
-    /* Heap tracing: init and start before main loop */
-    ESP_ERROR_CHECK(heap_trace_init_standalone(s_heap_trace_records, HEAP_TRACE_NUM_RECORDS));
-
-    int loop_count = 0;
     for (;;)
     {
-        if (loop_count == 0)
-        {
-            ESP_LOGI(WEB_TAG, "Heap before tracing: free=%lu, largest_block=%lu",
-                     (unsigned long)esp_get_free_heap_size(),
-                     (unsigned long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-            ESP_ERROR_CHECK(heap_trace_start(HEAP_TRACE_LEAKS));
-        }
-
         weather_fetch_and_parse();
         adafruit_fetch();
         adafruit_publish_ruuvi();
         adafruit_publish_pressure();
         adafruit_io_chart_fetch();
-
-        loop_count++;
-        if (loop_count == 10)
-        {
-            ESP_ERROR_CHECK(heap_trace_stop());
-            ESP_LOGI(WEB_TAG, "Heap after 10 loops: free=%lu, largest_block=%lu",
-                     (unsigned long)esp_get_free_heap_size(),
-                     (unsigned long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-            heap_trace_dump();
-            ESP_LOGI(WEB_TAG, "Heap trace complete — %zu records used",
-                     heap_trace_get_count());
-        }
 
         vTaskDelay(pdMS_TO_TICKS(FETCH_INTERVAL_MS));
     }

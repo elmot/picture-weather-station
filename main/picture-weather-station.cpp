@@ -10,6 +10,8 @@
 #include "chart.h"
 #include "fox_condition.h"
 #include "sensor_history.h"
+#include "esp_heap_caps.h"
+#include "esp_heap_trace.h"
 
 extern "C" {
 void sensor_task(void*);
@@ -30,6 +32,10 @@ extern "C" void pushRuuviData(const ruuvi_data_t* data)
 }
 
 static const char* TAG = "picture-ws";
+
+/* Heap trace: record buffer for standalone mode */
+constexpr size_t HEAP_TRACE_NUM_RECORDS = 400;
+static heap_trace_record_t s_heap_trace_records[HEAP_TRACE_NUM_RECORDS];
 
 bool isDataExpired(const TickType_t last_update)
 {

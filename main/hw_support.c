@@ -47,7 +47,7 @@ esp_lcd_panel_handle_t s_panel;
 static void lcd_init()
 {
 
-    constexpr spi_bus_config_t bus = {
+    static const spi_bus_config_t bus = {
         .mosi_io_num   = PIN_LCD_MOSI,
         .miso_io_num   = -1,
         .sclk_io_num   = PIN_LCD_CLK,
@@ -58,7 +58,7 @@ static void lcd_init()
 
     ESP_ERROR_CHECK(spi_bus_initialize(LCD_SPI_HOST, &bus, SPI_DMA_CH_AUTO));
 
-    esp_lcd_panel_io_handle_t io = nullptr;
+    esp_lcd_panel_io_handle_t io = NULL;
     esp_lcd_panel_io_spi_config_t io_cfg = {
         .cs_gpio_num = PIN_LCD_CS,
         .dc_gpio_num = PIN_LCD_DC,
@@ -111,7 +111,7 @@ static void i2c_init()
  *---------------------------------------------------------------------*/
 static void xl9535_init()
 {
-    constexpr  i2c_device_config_t dev_cfg = {
+    static const  i2c_device_config_t dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = XL9535_ADDR,
         .scl_speed_hz = I2C_CLK_HZ,
