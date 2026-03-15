@@ -13,6 +13,7 @@
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_heap_caps.h"
+#include "esp_heap_trace.h"
 
 constexpr uint32_t WIFI_CONNECTED_BIT = BIT0;
 constexpr uint32_t WIFI_FAIL_BIT = BIT1;
@@ -87,6 +88,10 @@ public:
 
 
 static PsramBuf<HTTP_BUF_SIZE> s_http_buf;
+
+/* Heap trace: record buffer for standalone mode */
+constexpr size_t HEAP_TRACE_NUM_RECORDS = 200;
+static heap_trace_record_t s_heap_trace_records[HEAP_TRACE_NUM_RECORDS];
 
 extern "C" {
 static esp_err_t http_event_handler(esp_http_client_event_t* evt)
@@ -427,13 +432,39 @@ static void wifi_init_sta()
 {
     (void)arg;
     wifi_init_sta();
+
+    /* Heap tracing: init and start before main loop */
+    ESP_ERROR_CHECK(heap_trace_init_standalone(s_heap_trace_records, HEAP_TRACE_NUM_RECORDS));
+
+    int loop_count = 0;
     for (;;)
     {
+        if (loop_count == 0)
+        {
+            ESP_LOGI(WEB_TAG, "Heap before tracing: free=%lu, largest_block=%lu",
+                     (unsigned long)esp_get_free_heap_size(),
+                     (unsigned long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+            ESP_ERROR_CHECK(heap_trace_start(HEAP_TRACE_LEAKS));
+        }
+
         weather_fetch_and_parse();
         adafruit_fetch();
         adafruit_publish_ruuvi();
         adafruit_publish_pressure();
         adafruit_io_chart_fetch();
+
+        loop_count++;
+        if (loop_count == 10)
+        {
+            ESP_ERROR_CHECK(heap_trace_stop());
+            ESP_LOGI(WEB_TAG, "Heap after 10 loops: free=%lu, largest_block=%lu",
+                     (unsigned long)esp_get_free_heap_size(),
+                     (unsigned long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+            heap_trace_dump();
+            ESP_LOGI(WEB_TAG, "Heap trace complete — %zu records used",
+                     heap_trace_get_count());
+        }
+
         vTaskDelay(pdMS_TO_TICKS(FETCH_INTERVAL_MS));
     }
 }
