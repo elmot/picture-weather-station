@@ -27,17 +27,6 @@ static const char* TAG = "hw";
 
 i2c_master_bus_handle_t s_i2c_bus;
 
-/*-----------------------------------------------------------------------
- * XL9535 I2C port extender
- *---------------------------------------------------------------------*/
-#define XL9535_ADDR      0x20
-#define XL9535_REG_OUT0  0x02
-#define XL9535_REG_OUT1  0x03
-#define XL9535_REG_CFG0  0x06
-#define XL9535_REG_CFG1  0x07
-
-static i2c_master_dev_handle_t s_xl9535;
-
 #define LCD_CLK_HZ       (40 * 1000 * 1000)
 
 esp_lcd_panel_handle_t s_panel;
@@ -104,38 +93,19 @@ static void i2c_init()
     };
     ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_new_master_bus(&bus_cfg, &s_i2c_bus));
     ESP_LOGI(TAG, "I2C initialised (SDA=%d, SCL=%d)", I2C_SDA, I2C_SCL);
+
+    ESP_LOGI(TAG, "Scanning I2C bus...");
+    for (uint8_t addr = 1; addr < 127; addr++) {
+        if (i2c_master_probe(s_i2c_bus, addr, 50) == ESP_OK) {
+            ESP_LOGI(TAG, "  Found device at 0x%02X", addr);
+        }
+    }
+    ESP_LOGI(TAG, "I2C scan complete");
 }
 
-/*-----------------------------------------------------------------------
- * Initialise XL9535 port extender: pin 0 -> output high
- *---------------------------------------------------------------------*/
-static void xl9535_init()
-{
-    constexpr  i2c_device_config_t dev_cfg = {
-        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-        .device_address = XL9535_ADDR,
-        .scl_speed_hz = I2C_CLK_HZ,
-        .scl_wait_us = 0,
-        .flags = {},
-    };
-    ESP_ERROR_CHECK(i2c_master_bus_add_device(s_i2c_bus, &dev_cfg, &s_xl9535));
-
-    uint8_t cfg_cmd[] = {XL9535_REG_CFG0, 0xFE};
-    ESP_ERROR_CHECK(i2c_master_transmit(s_xl9535, cfg_cmd, sizeof(cfg_cmd), -1));
-}
 
 void hw_init()
 {
     i2c_init();
-    xl9535_init();
     lcd_init();
-}
-
-void backlight(bool on)
-{
-    uint8_t out_cmd[] = {XL9535_REG_OUT0, on ? 0x01 : 0};
-    ESP_ERROR_CHECK(i2c_master_transmit(s_xl9535, out_cmd, sizeof(out_cmd), -1));
-
-    ESP_LOGI(TAG, "Backlight %s", on ? "ON" : "OFF");
-
 }

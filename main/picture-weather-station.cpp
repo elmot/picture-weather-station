@@ -39,20 +39,20 @@ bool isDataExpired(const TickType_t last_update)
 }
 
 /*-----------------------------------------------------------------------
- * AHT20 indoor sensor
+ * SHTC3 indoor sensor
  *---------------------------------------------------------------------*/
 
 typedef struct
 {
     float temperature;
     float humidity;
-} aht20_reading_t;
+} shtc3_reading_t;
 
-SensorHistory<aht20_reading_t, 96> g_aht20_history{};
+SensorHistory<shtc3_reading_t, 96> g_shtc3_history{};
 
-extern "C" void pushAht20Data(float temperature, float humidity)
+extern "C" void pushShtc3Data(float temperature, float humidity)
 {
-    g_aht20_history.push({temperature, humidity});
+    g_shtc3_history.push({temperature, humidity});
 }
 
 
@@ -78,7 +78,6 @@ extern "C" void app_main(void)
         .touch_handle = nullptr,
         .byte_swap = true,
     });
-    backlight(true);
     g_meteo_queue = xQueueCreate(1, sizeof(meteo_data_t));
     ruuvi_task_init();
     xTaskCreate(wifi_task, "weather", 16384, nullptr, 5, nullptr);
@@ -119,12 +118,12 @@ extern "C" void app_main(void)
                            }
 
                            /* Indoor sensor */
-                           auto data = g_aht20_history.map([](const aht20_reading_t& reading)
+                           auto data = g_shtc3_history.map([](const shtc3_reading_t& reading)
                            {
                                return reading.temperature;
                            });
                            const auto tempHistory = std::make_shared<slint::VectorModel<float>>(data);
-                           const auto last = g_aht20_history.last();
+                           const auto last = g_shtc3_history.last();
                            ui->set_indoor_data(LocalData{
                                .tempC = last.temperature,
                                .relHumidity = last.humidity,

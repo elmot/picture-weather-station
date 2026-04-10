@@ -4,7 +4,7 @@
 #include "chart.h"
 
 /*-----------------------------------------------------------------------
- * Simple chart renderer — draws AHT20 temperature history into an image
+ * Simple chart renderer — draws a value history into an image
  *---------------------------------------------------------------------*/
 
 static void draw_line(slint::Rgba8Pixel* buf, int w, int h,

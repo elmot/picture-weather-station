@@ -16,8 +16,6 @@ extern esp_lcd_panel_handle_t s_panel;
 
 void hw_init(void);
 
-void backlight(bool on);
-
 #ifdef __cplusplus
 }
 #endif

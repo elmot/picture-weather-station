@@ -47,6 +47,16 @@ dependencies:
     source:
       type: idf
     version: 6.0.0
+  pedrominatel/shtc3:
+    component_hash: 8a1d0d0700c5c5fe75f59bfb6d165d778c89aba17588c3c763375191b7181efc
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.3'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.4.1
   slint/slint:
     component_hash: abdebc3a8dbed6373e8df6ba4148758099c257dc1a8e70b82a82b3bfa4c69779
     dependencies:
@@ -64,7 +74,8 @@ dependencies:
 direct_dependencies:
 - espressif/cjson
 - espressif/esp_lcd_ili9341
+- pedrominatel/shtc3
 - slint/slint
-manifest_hash: 43f5c47dc172aa403306d1dbd6f0108829ed8298253017240571113b5f8d426e
+manifest_hash: ee836c586f768956def6cb4f749f95f3ac9f92f957970d14df007b3a02ed6975
 target: esp32s3
-version: 2.0.0
+version: 3.0.0

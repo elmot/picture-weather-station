@@ -18,7 +18,7 @@ sources and presents it on a small desktop display with fox mascot illustrations
 | Source          | What it provides                                             | Transport    |
 |-----------------|--------------------------------------------------------------|--------------|
 | **Open-Meteo**  | Outdoor temperature, feels-like, wind, weather code          | HTTPS REST   |
-| **AHT20**       | Indoor temperature & humidity (with 96-sample history chart) | I2C          |
+| **SHTC3**       | Indoor temperature & humidity (with 96-sample history chart) | I2C          |
 | **Ruuvi Tag**   | Temperature, humidity, barometric pressure, battery          | BLE (NimBLE) |
 | **Adafruit IO** | Remote feed value (e.g. CO2 ppm) + chart history             | HTTPS REST   |
 
@@ -29,7 +29,7 @@ Ruuvi pressure is also published back to Adafruit IO every 5 minutes.
 - **[DFRobot Unihiker K10](https://www.dfrobot.com/)** 
   - ESP32-S3, 16 MB flash, 8 MB octal PSRAM
   - 320x240 TFT LCD
-  - **AHT20** temperature/humidity sensor
+  - **SHTC3** temperature/humidity sensor
 - _TBD_ migrate to **[ESP32-S3-PhotoPainter 7.3"](https://www.waveshare.com/esp32-s3-photopainter.htm)**
 - **[Ruuvi Tag](https://ruuvi.com/)**
 

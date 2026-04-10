@@ -2,7 +2,7 @@
                  SRCS
                     picture-weather-station.cpp
                     hw_support.c
-                    aht20_task.c
+                    shtc3_task.c
                     ruuvi_task.c
                     web_task.cpp
                     chart.cpp

@@ -43,9 +43,9 @@ typedef struct
 extern QueueHandle_t g_meteo_queue; /* depth-1 queue, use xQueueOverwrite / xQueuePeek */
 
 /*-----------------------------------------------------------------------
- * AHT20 indoor sensor
+ * SHTC3 indoor sensor
  *---------------------------------------------------------------------*/
-void pushAht20Data(float temperature, float humidity);
+void pushShtc3Data(float temperature, float humidity);
 /*-----------------------------------------------------------------------
  * Adafruit IO feed
  *---------------------------------------------------------------------*/
