@@ -1,0 +1,3 @@
+dependencies:
+  lvgl/lvgl: ^9.4.0
+  tuanpmt/esp_epaper: ^2.0.0

@@ -1,0 +1,6 @@
+<component name="DebugServers">
+  <esp-idf-debug-target name="ESP-IDF" uniqueID="03f1f1c6-3f0e-404f-b4b5-35991202dd04" selected="true">
+    <console enabled="false" />
+    <target warmup-ms="2000" uart="COM7" />
+  </esp-idf-debug-target>
+</component>
