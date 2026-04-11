@@ -1,24 +1,12 @@
-#include "esp_lcd_io_spi.h"
-#include "esp_lcd_types.h"
 #include "driver/i2c_master.h"
-#include "esp_lcd_ili9341.h"
-#include "esp_lcd_panel_ops.h"
 #include "esp_log.h"
-#include "driver/spi_master.h"
 #include "hw_support.h"
 #include "i2c_bsp.h"
 #include "power_bsp.h"
+#include "epaper.h"
+#include "epd_panel_adapter.h"
 
 static const char* TAG = "hw";
-
-/*-----------------------------------------------------------------------
- * Unihiker K10 LCD wiring (ILI9341, 240x320)
- *---------------------------------------------------------------------*/
-#define LCD_SPI_HOST     SPI2_HOST
-#define PIN_LCD_MOSI     21
-#define PIN_LCD_CLK      12
-#define PIN_LCD_CS       GPIO_NUM_14
-#define PIN_LCD_DC       GPIO_NUM_13
 
 /*-----------------------------------------------------------------------
  * I2C bus
@@ -29,53 +17,29 @@ static const char* TAG = "hw";
 i2c_master_bus_handle_t s_i2c_bus;
 I2cMasterBus *s_i2c_bus_obj;
 
-#define LCD_CLK_HZ       (40 * 1000 * 1000)
-
 esp_lcd_panel_handle_t s_panel;
+
 /*-----------------------------------------------------------------------
- * Initialise SPI bus + ILI9341 panel, turn on backlight
+ * Initialise e-paper display + adapter panel for Slint
  *---------------------------------------------------------------------*/
-static void lcd_init()
+static void epaper_init()
 {
+    epd_config_t epd_cfg = EPD_CONFIG_73_6COLOR();
+    epd_handle_t epd = nullptr;
 
-    constexpr spi_bus_config_t bus = {
-        .mosi_io_num   = PIN_LCD_MOSI,
-        .miso_io_num   = -1,
-        .sclk_io_num   = PIN_LCD_CLK,
-        .quadwp_io_num = -1,
-        .quadhd_io_num = -1,
-        .max_transfer_sz = LCD_H_RES * 80 * sizeof(uint16_t),
-    };
+    esp_err_t ret = epd_init(&epd_cfg, &epd);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to init e-paper: %s", esp_err_to_name(ret));
+        return;
+    }
 
-    ESP_ERROR_CHECK(spi_bus_initialize(LCD_SPI_HOST, &bus, SPI_DMA_CH_AUTO));
+    epd_panel_info_t info;
+    epd_get_info(epd, &info);
+    ESP_LOGI(TAG, "E-paper: %dx%d, buf=%lu bytes", info.width, info.height,
+             (unsigned long)info.buffer_size);
 
-    esp_lcd_panel_io_handle_t io = nullptr;
-    esp_lcd_panel_io_spi_config_t io_cfg = {
-        .cs_gpio_num = PIN_LCD_CS,
-        .dc_gpio_num = PIN_LCD_DC,
-        .pclk_hz = LCD_CLK_HZ,
-        .trans_queue_depth = 10,
-        .lcd_cmd_bits = 8,
-        .lcd_param_bits = 8,
-    };
-    ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(LCD_SPI_HOST, &io_cfg, &io));
-
-    esp_lcd_panel_dev_config_t dev_cfg = {
-        .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR,
-        .data_endian = LCD_RGB_DATA_ENDIAN_BIG,
-        .bits_per_pixel = 16,
-        .reset_gpio_num = GPIO_NUM_NC,
-    };
-    ESP_ERROR_CHECK(esp_lcd_new_panel_ili9341(io, &dev_cfg, &s_panel));
-
-    ESP_ERROR_CHECK(esp_lcd_panel_reset(s_panel));
-    ESP_ERROR_CHECK(esp_lcd_panel_init(s_panel));
-
-    /* Landscape: swap X/Y axes, then mirror to get correct orientation */
-    ESP_ERROR_CHECK(esp_lcd_panel_swap_xy(s_panel, true));
-    ESP_ERROR_CHECK(esp_lcd_panel_mirror(s_panel, false, false));
-
-    ESP_LOGI(TAG, "LCD initialised (%dx%d)", LCD_H_RES, LCD_V_RES);
+    s_panel = epd_panel_adapter_create(epd, LCD_H_RES, LCD_V_RES);
+    ESP_LOGI(TAG, "E-paper adapter ready (%dx%d render)", LCD_H_RES, LCD_V_RES);
 }
 
 /*------------------------------------------------------------------------
@@ -102,5 +66,5 @@ static void i2c_init()
 void hw_init()
 {
     i2c_init();
-    lcd_init();
+    epaper_init();
 }

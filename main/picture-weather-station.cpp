@@ -2,7 +2,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
-#include "esp_lcd_panel_io.h"
 #include "nvs_flash.h"
 #include "weather-station.h"
 #include "datastreams.h"
@@ -76,7 +75,7 @@ extern "C" void app_main(void)
         .size = slint::PhysicalSize({LCD_H_RES, LCD_V_RES}),
         .panel_handle = s_panel,
         .touch_handle = nullptr,
-        .byte_swap = true,
+        .byte_swap = false,
     });
     g_meteo_queue = xQueueCreate(1, sizeof(meteo_data_t));
     ruuvi_task_init();

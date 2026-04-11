@@ -5,6 +5,8 @@
 #ifndef PICTURE_WEATHER_STATION_HW_H
 #define PICTURE_WEATHER_STATION_HW_H
 
+#include "esp_lcd_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
