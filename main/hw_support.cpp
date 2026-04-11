@@ -6,6 +6,8 @@
 #include "esp_log.h"
 #include "driver/spi_master.h"
 #include "hw_support.h"
+#include "i2c_bsp.h"
+#include "power_bsp.h"
 
 static const char* TAG = "hw";
 
@@ -23,9 +25,9 @@ static const char* TAG = "hw";
  *---------------------------------------------------------------------*/
 #define I2C_SDA          GPIO_NUM_47
 #define I2C_SCL          GPIO_NUM_48
-#define I2C_CLK_HZ       (400 * 1000)
 
 i2c_master_bus_handle_t s_i2c_bus;
+I2cMasterBus *s_i2c_bus_obj;
 
 #define LCD_CLK_HZ       (40 * 1000 * 1000)
 
@@ -77,21 +79,12 @@ static void lcd_init()
 }
 
 /*------------------------------------------------------------------------
- * Initialise I2C master bus
+ * Initialise I2C master bus + PMIC
  *---------------------------------------------------------------------*/
 static void i2c_init()
 {
-    static i2c_master_bus_config_t bus_cfg = {
-        .i2c_port = I2C_NUM_0,
-        .sda_io_num = I2C_SDA,
-        .scl_io_num = I2C_SCL,
-        .clk_source = I2C_CLK_SRC_DEFAULT,
-        .glitch_ignore_cnt = 7,
-        .intr_priority = 0,
-        .trans_queue_depth = 0,
-        .flags = {.enable_internal_pullup = true,.allow_pd = 0},
-    };
-    ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_new_master_bus(&bus_cfg, &s_i2c_bus));
+    s_i2c_bus_obj = new I2cMasterBus(I2C_SCL, I2C_SDA, I2C_NUM_0);
+    s_i2c_bus = s_i2c_bus_obj->Get_I2cBusHandle();
     ESP_LOGI(TAG, "I2C initialised (SDA=%d, SCL=%d)", I2C_SDA, I2C_SCL);
 
     ESP_LOGI(TAG, "Scanning I2C bus...");
@@ -101,6 +94,8 @@ static void i2c_init()
         }
     }
     ESP_LOGI(TAG, "I2C scan complete");
+
+    Custom_PmicPortInit(s_i2c_bus_obj, 0x34);
 }
 
 
