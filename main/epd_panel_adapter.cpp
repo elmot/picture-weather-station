@@ -2,7 +2,6 @@
 #include "esp_lcd_panel_interface.h"
 #include "esp_log.h"
 #include "esp_timer.h"
-#include <cstdlib>
 #include <cstring>
 
 static const char *TAG = "epd_adapter";
@@ -28,8 +27,9 @@ struct epd_adapter_ctx {
     uint16_t     render_w;
     uint16_t     render_h;
     uint16_t     panel_w;
-    esp_timer_handle_t flush_timer;
     bool         dirty;
+    bool         refreshing;      // true while e-paper is physically updating
+    int64_t      last_flush_us;   // timestamp of last flush start
 };
 
 /*-----------------------------------------------------------------------
@@ -69,18 +69,27 @@ static inline void set_epd_pixel(uint8_t *fb, int x, int y, int w, uint8_t color
         fb[addr] = (fb[addr] & 0xF0) | (color & 0x0F);
 }
 
+// Minimum microseconds between flush starts (25 s covers the ~20 s refresh)
+#define EPD_FLUSH_COOLDOWN_US  (25LL * 1000 * 1000)
+
 /*-----------------------------------------------------------------------
- * Deferred flush callback — fires a few seconds after the last draw
+ * Flush the e-paper if enough time has passed since the last refresh.
+ * Called from the Slint event-loop thread, so no extra sync needed.
  *---------------------------------------------------------------------*/
-static void flush_timer_cb(void *arg)
+static void maybe_flush(epd_adapter_ctx *ctx)
 {
-    auto *ctx = static_cast<epd_adapter_ctx *>(arg);
-    if (ctx->dirty) {
-        ESP_LOGI(TAG, "Flushing e-paper (%dx%d rendered on %d-wide panel)…",
-                 ctx->render_w, ctx->render_h, ctx->panel_w);
-        epd_flush_framebuffer(ctx->epd, EPD_UPDATE_FULL);
-        ctx->dirty = false;
-    }
+    if (!ctx->dirty) return;
+
+    int64_t now = esp_timer_get_time();
+    if (ctx->refreshing && (now - ctx->last_flush_us < EPD_FLUSH_COOLDOWN_US))
+        return;  // still cooling down from previous refresh
+
+    ESP_LOGI(TAG, "Flushing e-paper (%dx%d on %d-wide panel)",
+             ctx->render_w, ctx->render_h, ctx->panel_w);
+    ctx->last_flush_us = now;
+    ctx->refreshing    = true;
+    ctx->dirty         = false;
+    epd_flush_framebuffer(ctx->epd, EPD_UPDATE_FULL);
 }
 
 /*-----------------------------------------------------------------------
@@ -103,9 +112,11 @@ static esp_err_t adapter_draw_bitmap(esp_lcd_panel_t *panel,
     }
 
     ctx->dirty = true;
-    // Restart the one-shot debounce timer (3 s after last draw)
-    esp_timer_stop(ctx->flush_timer);  // ignore error if not running
-    esp_timer_start_once(ctx->flush_timer, 3 * 1000 * 1000);
+
+    // If this is the last line of the render area, try to flush now
+    if (y_end >= ctx->render_h) {
+        maybe_flush(ctx);
+    }
     return ESP_OK;
 }
 
@@ -133,17 +144,9 @@ esp_lcd_panel_handle_t epd_panel_adapter_create(epd_handle_t epd,
     ctx->render_w = render_w;
     ctx->render_h = render_h;
     ctx->panel_w  = info.width;
-    ctx->dirty    = false;
-
-    // One-shot timer for debounced e-paper refresh
-    esp_timer_create_args_t timer_args = {
-        .callback = flush_timer_cb,
-        .arg = ctx,
-        .dispatch_method = ESP_TIMER_TASK,
-        .name = "epd_flush",
-        .skip_unhandled_events = true,
-    };
-    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &ctx->flush_timer));
+    ctx->dirty       = false;
+    ctx->refreshing  = false;
+    ctx->last_flush_us = 0;
 
     auto *panel = new esp_lcd_panel_t{};
     panel->reset       = adapter_noop;
