@@ -69,8 +69,8 @@ static inline void set_epd_pixel(uint8_t *fb, int x, int y, int w, uint8_t color
         fb[addr] = (fb[addr] & 0xF0) | (color & 0x0F);
 }
 
-// Minimum microseconds between flush starts (25 s covers the ~20 s refresh)
-#define EPD_FLUSH_COOLDOWN_US  (25LL * 1000 * 1000)
+// Minimum microseconds between flush starts (60 s covers the refresh and cooldown)
+#define EPD_FLUSH_COOLDOWN_US  (60LL * 1000 * 1000)
 
 /*-----------------------------------------------------------------------
  * Flush the e-paper if enough time has passed since the last refresh.

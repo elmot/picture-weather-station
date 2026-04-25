@@ -50,8 +50,8 @@ export component WeatherStation inherits Window {
     private property <physical-length> main-font-size:13px;
     private property <physical-length> reg-widget-width:73px;
 
-    width: 320px;
-    height: 240px;
+    width: 800px;
+    height: 480px;
     background: #FF7F00;
     WeatherIcon {
         x: 0;
@@ -153,8 +153,8 @@ export component WeatherStation inherits Window {
 
     DataWidget {
         name: "City";
-        x: 7px;
-        y: 85px;
+        x: 1px;
+        y: 1px;
         valid: !meteo-data.connFail;
         HorizontalLayout {
         	width: 133px;
@@ -187,11 +187,11 @@ export component WeatherStation inherits Window {
 
     DataWidget {
         name: "Local";
-        x: 7px;
-        y: 142px;
+        x: 1px;
+        y: 1px;
         HorizontalLayout {
-        	width: 133px;
-            spacing: 8px;
+        	width: 1px;
+            spacing: 1px;
             HorizontalLayout {
                 alignment: start;
                 Text {
@@ -222,15 +222,41 @@ export component WeatherStation inherits Window {
     }
 
     Image {
-        x: parent.width - self.width;
-        y: 0;
-        source: meteo-data.condition == FoxConditionEnum.wind ? @image-url("../pict/fox_wind.png") : meteo-data.condition == FoxConditionEnum.snow ? @image-url("../pict/fox_snow.png") : meteo-data.condition == FoxConditionEnum.rain ? @image-url("../pict/fox_rain.png") : @image-url("../pict/fox_sun.png");
+    	x:0;
+    	y:0;
+        source: @image-url("../pict/pencifox/ready/cloudy.png");
+    }
+    Image {
+    	x: 250px;
+    	y:0;
+        source: @image-url("../pict/pencifox/ready/foggy.png");
+    }
+    Image {
+    	x: 500px;
+    	y:0;
+        source: @image-url("../pict/pencifox/ready/rainy.png");
+    }
+
+    Image {
+    	x:0;
+    	y:250px;
+        source: @image-url("../pict/pencifox/ready/snowy.png");
+    }
+    Image {
+    	x: 250px;
+    	y:250px;
+        source: @image-url("../pict/pencifox/ready/sunny.png");
+    }
+    Image {
+    	x: 500px;
+    	y:250px;
+        source: @image-url("../pict/pencifox/ready/windy.png");
     }
 
     Chart {
-        x: 160px;
+        x: 750px;
         y: 162px;
-        width: 160px;
+        width: 50px;
         height: 78px;
         background: blue;
         data: chart-history;
