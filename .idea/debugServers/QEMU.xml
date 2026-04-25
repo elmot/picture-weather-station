@@ -1,0 +1,14 @@
+<component name="DebugServers">
+  <generic-debug-target name="QEMU" uniqueID="0d86b6a7-7ae5-4c15-8649-cd21540eaee5">
+    <debugger version="1">
+      <debugger kind="GDB">C:\Espressif\tools\xtensa-esp-elf-gdb\16.3_20250913\xtensa-esp-elf-gdb\bin\xtensa-esp32s3-elf-gdb.exe</debugger>
+      <env />
+    </debugger>
+    <gdbserver exe="C:\Espressif\tools\qemu-xtensa\esp_develop_9.2.2_20250817\qemu\bin\qemu-system-xtensa.exe" args="-nographic -machine esp32s3 -m 8M -drive file=D:/projects/picture-weather-station/build-design-check/merged_qemu.bin,if=mtd,format=raw -global driver=timer.esp32.timg,property=wdt_disable,value=true -global driver=ssi_psram,property=is_octal,value=true -semihosting-config enable=on,target=gdb -no-reboot -s -S">
+      <env />
+    </gdbserver>
+    <console port="4444" />
+    <target download-type="NONE" reset-command="monitor system_reset" reset-before="false" reset-after="false" />
+    <connection remote-string="tcp::1234" custom-script="echo Connecting to target...\n&#10;$GDBTargetCommand$&#10;echo Connected to target!\n" warmup-ms="1500" />
+  </generic-debug-target>
+</component>
