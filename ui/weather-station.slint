@@ -3,7 +3,7 @@ import { DataWidget } from "./data-widget.slint";
 import { WeatherIcon } from "./weather-icon.slint";
 import { Chart, ChartSupport } from "./chart.slint";
 export { ChartSupport }
-export enum FoxConditionEnum { cloudy, foggy,good, rainy, snowy, sunny, windy }
+export enum FoxConditionEnum { cloudy, foggy,good, rainy, snowy, sunny, windy, net_fail }
 
 export struct RuuviData {
     tempC: float,
@@ -225,7 +225,8 @@ export component WeatherStation inherits Window {
         x: parent.width - self.width;
         y: 0;
         source:
-        meteo-data.condition == FoxConditionEnum.cloudy ? @image-url("../pict/pencifox/ready/cloudy.png")
+        meteo-data.condition == FoxConditionEnum.net-fail ? @image-url("../pict/pencifox/ready/net_fail.png")
+        : meteo-data.condition == FoxConditionEnum.cloudy ? @image-url("../pict/pencifox/ready/cloudy.png")
         : meteo-data.condition == FoxConditionEnum.foggy ? @image-url("../pict/pencifox/ready/foggy.png")
         : meteo-data.condition == FoxConditionEnum.good ? @image-url("../pict/pencifox/ready/good.png")
         : meteo-data.condition == FoxConditionEnum.rainy ? @image-url("../pict/pencifox/ready/rainy.png")
