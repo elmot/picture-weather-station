@@ -95,14 +95,17 @@ extern "C" void app_main(void)
                            if (xQueuePeek(g_meteo_queue, &meteo, 0) == pdTRUE)
                            {
                                ui->set_weather_code(static_cast<int>(meteo.code));
-                               ui->set_day(static_cast<bool>(meteo.is_day));
+                               const bool day = meteo.is_day;
+                               ui->set_day(day);
+                               const float wind_speed = meteo.wind_speed;
+                               const float wind_gusts = meteo.wind_gusts;
                                ui->set_meteo_data(OpenMeteoData{
                                    .tempC = meteo.temp,
                                    .tempFeelsC = meteo.feels,
-                                   .windSpeed = meteo.wind_speed,
-                                   .windGusts = meteo.wind_gusts,
+                                   .windSpeed = wind_speed,
+                                   .windGusts = wind_gusts,
                                    .windDir = meteo.wind_dir,
-                                   .condition = fox_condition(meteo.code),
+                                   .condition = fox_condition(meteo.code, day, wind_speed, wind_gusts),
                                    .connFail = isDataExpired(meteo.last_update),
                                });
                            }
@@ -110,7 +113,7 @@ extern "C" void app_main(void)
                            {
                                static const OpenMeteoData default_meteo_data{
                                    .tempC = 0.0f, .tempFeelsC = 0.0f, .windSpeed = 0.0f, .windGusts = 0.0f,
-                                   .windDir = slint::SharedString(""), .condition = FoxConditionEnum::Rain,
+                                   .windDir = slint::SharedString(""), .condition = FoxConditionEnum::Rainy,
                                    .connFail = true,
                                };
                                ui->set_meteo_data(default_meteo_data);
