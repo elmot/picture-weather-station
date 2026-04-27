@@ -33,9 +33,6 @@ extern SensorHistory<ruuvi_data_t, 1> g_ruuvi_history;
 extern SensorHistory<adafruit_data_t, 1> g_adafruit_history;
 extern SensorHistory<chart_data_t, 1> g_chart_history;
 
-constexpr uint32_t FETCH_INTERVAL_MS = 5 * 60 * 1000; /* 5 min */
-
-
 #define WEATHER_HOST "https://api.open-meteo.com"
 #define WEATHER_URL WEATHER_HOST\
 "/v1/forecast?latitude=" CONFIG_PWS_LAT \
@@ -383,7 +380,10 @@ static void event_handler(void* arg, esp_event_base_t event_base,
 }
 }
 
-static void wifi_init_sta()
+/*-----------------------------------------------------------------------
+ * Start Wi-Fi (non-blocking — returns once esp_wifi_start() is issued).
+ *---------------------------------------------------------------------*/
+extern "C" void wifi_start(void)
 {
     s_wifi_event_group = xEventGroupCreate();
 
@@ -394,8 +394,8 @@ static void wifi_init_sta()
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    esp_event_handler_instance_t instance_any_id;
-    esp_event_handler_instance_t instance_got_ip;
+    static esp_event_handler_instance_t instance_any_id;
+    static esp_event_handler_instance_t instance_got_ip;
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
         WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, nullptr, &instance_any_id));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
@@ -405,35 +405,45 @@ static void wifi_init_sta()
     ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_LOGI(TAG, "Connecting to '%s'...", CONFIG_PWS_WIFI_SSID);
+}
 
+/*-----------------------------------------------------------------------
+ * Block until Wi-Fi has an IP, or timeout.
+ *---------------------------------------------------------------------*/
+extern "C" bool wifi_wait_connected(uint32_t timeout_ms)
+{
+    if (s_wifi_event_group == nullptr) return false;
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
                                            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
-                                           pdFALSE, pdFALSE, portMAX_DELAY);
+                                           pdFALSE, pdFALSE,
+                                           pdMS_TO_TICKS(timeout_ms));
 
     if (bits & WIFI_CONNECTED_BIT)
     {
         ESP_LOGI(TAG, "Connected to '%s'", CONFIG_PWS_WIFI_SSID);
+        return true;
     }
-    else
-    {
-        ESP_LOGW(TAG, "Could not connect to '%s'", CONFIG_PWS_WIFI_SSID);
-    }
+    ESP_LOGW(TAG, "Could not connect to '%s'", CONFIG_PWS_WIFI_SSID);
+    return false;
 }
 
 /*-----------------------------------------------------------------------
- * FreeRTOS task — fetches weather periodically
+ * One-shot read of remote sources. Caller must have already confirmed
+ * a Wi-Fi connection via wifi_wait_connected().
  *---------------------------------------------------------------------*/
-[[noreturn]] void wifi_task(void* arg)
+extern "C" void wifi_fetch_remote_data(void)
 {
-    (void)arg;
-    wifi_init_sta();
-    for (;;)
-    {
-        weather_fetch_and_parse();
-        adafruit_fetch();
-        adafruit_publish_ruuvi();
-        adafruit_publish_pressure();
-        adafruit_io_chart_fetch();
-        vTaskDelay(pdMS_TO_TICKS(FETCH_INTERVAL_MS));
-    }
+    weather_fetch_and_parse();
+    adafruit_fetch();
+    adafruit_io_chart_fetch();
+}
+
+/*-----------------------------------------------------------------------
+ * Publish Ruuvi tag readings to Adafruit IO. Caller should have a
+ * fresh Ruuvi sample (otherwise the publish helpers are no-ops).
+ *---------------------------------------------------------------------*/
+extern "C" void wifi_publish_ruuvi(void)
+{
+    adafruit_publish_ruuvi();
+    adafruit_publish_pressure();
 }

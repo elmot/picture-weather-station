@@ -18,6 +18,7 @@ i2c_master_bus_handle_t s_i2c_bus;
 I2cMasterBus *s_i2c_bus_obj;
 
 esp_lcd_panel_handle_t s_panel;
+epd_handle_t s_epd = nullptr;
 
 /*-----------------------------------------------------------------------
  * Initialise e-paper display + adapter panel for Slint
@@ -25,20 +26,19 @@ esp_lcd_panel_handle_t s_panel;
 static void epaper_init()
 {
     epd_config_t epd_cfg = EPD_CONFIG_73_6COLOR();
-    epd_handle_t epd = nullptr;
 
-    esp_err_t ret = epd_init(&epd_cfg, &epd);
+    esp_err_t ret = epd_init(&epd_cfg, &s_epd);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to init e-paper: %s", esp_err_to_name(ret));
         return;
     }
 
     epd_panel_info_t info;
-    epd_get_info(epd, &info);
+    epd_get_info(s_epd, &info);
     ESP_LOGI(TAG, "E-paper: %dx%d, buf=%lu bytes", info.width, info.height,
              (unsigned long)info.buffer_size);
 
-    s_panel = epd_panel_adapter_create(epd, LCD_H_RES, LCD_V_RES);
+    s_panel = epd_panel_adapter_create(s_epd, LCD_H_RES, LCD_V_RES);
     ESP_LOGI(TAG, "E-paper adapter ready (%dx%d render)", LCD_H_RES, LCD_V_RES);
 }
 
@@ -67,4 +67,9 @@ void hw_init()
 {
     i2c_init();
     epaper_init();
+}
+
+void epaper_sleep()
+{
+  epd_sleep(s_epd);
 }

@@ -18,6 +18,8 @@ extern esp_lcd_panel_handle_t s_panel;
 
 void hw_init(void);
 
+void epaper_sleep(void);
+
 #ifdef __cplusplus
 }
 #endif

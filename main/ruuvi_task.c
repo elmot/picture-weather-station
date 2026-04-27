@@ -1,5 +1,6 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "esp_log.h"
 #include "datastreams.h"
 #include "nimble/nimble_port.h"
@@ -8,6 +9,8 @@
 #include "host/ble_gap.h"
 
 static const char* TAG = "ruuvi";
+
+static SemaphoreHandle_t s_first_sample_sem = NULL;
 
 #define RUUVI_COMPANY_ID  0x0499
 #define RUUVI_FORMAT      5
@@ -97,6 +100,7 @@ static int ble_gap_event_cb(struct ble_gap_event* event, void* arg)
                  parsed.pressure_mmhg, parsed.battery_voltage,
                  parsed.mac_address[0], parsed.mac_address[1], parsed.mac_address[2],
                  parsed.mac_address[3], parsed.mac_address[4], parsed.mac_address[5]);
+        if (s_first_sample_sem) xSemaphoreGive(s_first_sample_sem);
     }
 
     return 0;
@@ -138,6 +142,8 @@ static void nimble_host_task(void* param)
  *---------------------------------------------------------------------*/
 void ruuvi_task_init(void)
 {
+    s_first_sample_sem = xSemaphoreCreateBinary();
+
     esp_err_t ret = nimble_port_init();
     if (ret != ESP_OK)
     {
@@ -149,4 +155,13 @@ void ruuvi_task_init(void)
 
     nimble_port_freertos_init(nimble_host_task);
     ESP_LOGI(TAG, "Ruuvi task initialised");
+}
+
+/*-----------------------------------------------------------------------
+ * Wait until the first valid Ruuvi DF5 packet is parsed (or timeout).
+ *---------------------------------------------------------------------*/
+bool ruuvi_wait_for_sample(uint32_t timeout_ms)
+{
+    if (s_first_sample_sem == NULL) return false;
+    return xSemaphoreTake(s_first_sample_sem, pdMS_TO_TICKS(timeout_ms)) == pdTRUE;
 }

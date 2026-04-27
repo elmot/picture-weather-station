@@ -2,6 +2,7 @@
 #include "esp_lcd_panel_interface.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "slint.h"
 #include <cstring>
 
 static const char *TAG = "epd_adapter";
@@ -90,6 +91,10 @@ static void maybe_flush(epd_adapter_ctx *ctx)
     ctx->refreshing    = true;
     ctx->dirty         = false;
     epd_flush_framebuffer(ctx->epd, EPD_UPDATE_FULL);
+
+    // The flush above is synchronous — the panel has finished refreshing.
+    // One-shot wake-render-sleep cycle: tell Slint to exit ui->run().
+    slint::quit_event_loop();
 }
 
 /*-----------------------------------------------------------------------
