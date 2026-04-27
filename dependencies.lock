@@ -23,13 +23,6 @@ dependencies:
     source:
       type: idf
     version: 6.0.0
-  lvgl/lvgl:
-    component_hash: 17e68bfd21f0edf4c3ee838e2273da840bf3930e5dbc3bfa6c1190c3aed41f9f
-    dependencies: []
-    source:
-      registry_url: https://components.espressif.com
-      type: service
-    version: 9.4.0
   pedrominatel/shtc3:
     component_hash: 8a1d0d0700c5c5fe75f59bfb6d165d778c89aba17588c3c763375191b7181efc
     dependencies:
@@ -41,7 +34,7 @@ dependencies:
       type: service
     version: 1.4.1
   slint/slint:
-    component_hash: abdebc3a8dbed6373e8df6ba4148758099c257dc1a8e70b82a82b3bfa4c69779
+    component_hash: 80c9777fb8c2ecd60d4e34c69c5ded117de7c4f8e5f58cce0941320c753d0149
     dependencies:
     - name: espressif/esp_lcd_touch
       registry_url: https://components.espressif.com
@@ -53,32 +46,12 @@ dependencies:
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 1.15.1
-  tuanpmt/esp_epaper:
-    component_hash: 09d1c73275bbf0791240a737edf3a950539074cf228f37d9e4b62772b9871c77
-    dependencies:
-    - name: idf
-      require: private
-      version: '>=5.0.0'
-    - name: lvgl/lvgl
-      registry_url: https://components.espressif.com
-      require: public
-      version: ^9.0.0
-    source:
-      registry_url: https://components.espressif.com/
-      type: service
-    targets:
-    - esp32
-    - esp32s2
-    - esp32s3
-    - esp32c3
-    - esp32c6
-    version: 2.0.0
+    version: 1.16.1
 direct_dependencies:
 - espressif/cjson
+- idf
 - pedrominatel/shtc3
 - slint/slint
-- tuanpmt/esp_epaper
-manifest_hash: 5f5bde07daf8ee5bf3baab0c8c9b4e28982317caacdfb9f855c37ba088955cf6
+manifest_hash: 6888eacae122bcb3dfb333e5117ef7031c4ca48699a25fcd042d3f5f31d1fcdb
 target: esp32s3
 version: 3.0.0

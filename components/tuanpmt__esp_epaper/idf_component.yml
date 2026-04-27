@@ -1,0 +1,16 @@
+dependencies:
+  idf:
+    version: '>=6.0.0'
+description: Stripped & fixed version of tuanpmt's E-Paper display driver for ESP-IDF. Supports  6-color panels with Floyd-Steinberg dithering.
+license: MIT
+maintainers:
+- tuanpmt
+repository: https://github.com/tuanpmt/esp_epaper.git
+targets:
+- esp32
+- esp32s2
+- esp32s3
+- esp32c3
+- esp32c6
+url: https://github.com/tuanpmt/esp_epaper
+version: 2.0.0

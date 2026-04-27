@@ -1,0 +1,5 @@
+dependencies:
+  esp_epaper:
+    path: ../../..
+    version: '*'
+  lvgl/lvgl: ^9.4.0

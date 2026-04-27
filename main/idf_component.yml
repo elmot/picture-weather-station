@@ -2,4 +2,3 @@ dependencies:
   espressif/cjson: ^1.7.19~1
   slint/slint: ^1.15.1
   pedrominatel/shtc3: ^1.4.1
-  tuanpmt/esp_epaper: ^2.0.0
