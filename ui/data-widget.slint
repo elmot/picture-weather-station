@@ -1,19 +1,19 @@
 export component DataWidget inherits Rectangle {
     in property <string> name;
-    in property <color> borderColor: #4A90E2;
+    in property <color> borderColor: #0000FF;
     in property <bool> valid: true;
     width: inner.width;
     height: inner.height;
     inner := Rectangle {
         border-color: borderColor;
-        border-width: 2px;
-        border-radius: 8px;
-        background: #FF7F00;
+        border-width: 3px;
+        border-radius: 12px;
+        background: #FFFFD0;
         width: max(layout.preferred-width + 5px, label.preferred-width + 15px);
         height: layout.preferred-height + 5px;
         label := Rectangle {
-            x: 8px;
-            y: -6px;
+            x: 12px;
+            y: -10px;
             background: valid ? parent.background : red;
             width: header.preferred-width + 5px;
             height: header.preferred-height + 5px;
@@ -22,16 +22,16 @@ export component DataWidget inherits Rectangle {
                 color: borderColor;
                 horizontal-alignment: left;
                 text: name;
-                font-size: 12px;
+                font-size: 18px;
             }
         }
 
         layout := VerticalLayout {
             alignment: start;
             padding-bottom: 0px;
-            padding-top: 10px;
-            padding-left: 7px;
-            padding-right: 3px;
+            padding-top: 20px;
+            padding-left: 15px;
+            padding-right: 8px;
             @children
         }
     }
