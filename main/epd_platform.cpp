@@ -15,19 +15,6 @@ constexpr auto m_size = slint::PhysicalSize({LCD_H_RES, LCD_V_RES});
 static slint::Rgb8Pixel * render_buffer = nullptr;
 
 /*-----------------------------------------------------------------------
- * Override the e-paper component's __weak idle hook. The default does
- * vTaskDelay(5ms) inside the busy-pin polling loop. The 6-color panel
- * stays busy for ~30 s per refresh — light-sleep instead, so the SoC
- * draws ~µA between polls. Wakeup source is the timer; the panel's
- * BUSY pin transition is detected on the next poll.
- *---------------------------------------------------------------------*/
-extern "C" void epd_idle(uint32_t /*ms*/)
-{
-    esp_sleep_enable_timer_wakeup(300ULL * 1000ULL);  /* 300 ms */
-    esp_light_sleep_start();
-}
-
-/*-----------------------------------------------------------------------
  * 6-color palette
  *---------------------------------------------------------------------*/
 static const struct { uint8_t r, g, b, epd; } palette[] = {
