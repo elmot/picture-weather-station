@@ -3,15 +3,21 @@
 #include "esp_sleep.h"
 #include <memory>
 #include <vector>
+#include "freertos/FreeRTOS.h"
 
 #include "hw_support.h"
 
 static const char *TAG = "epd_platform";
+#define DITHERING 1
+
+constexpr auto m_size = slint::PhysicalSize({LCD_H_RES, LCD_V_RES});
+
+static slint::Rgb8Pixel * render_buffer = nullptr;
 
 /*-----------------------------------------------------------------------
  * Override the e-paper component's __weak idle hook. The default does
  * vTaskDelay(5ms) inside the busy-pin polling loop. The 6-color panel
- * stays busy for ~30 s per refresh — light-sleep instead so the SoC
+ * stays busy for ~30 s per refresh — light-sleep instead, so the SoC
  * draws ~µA between polls. Wakeup source is the timer; the panel's
  * BUSY pin transition is detected on the next poll.
  *---------------------------------------------------------------------*/
@@ -33,16 +39,17 @@ static const struct { uint8_t r, g, b, epd; } palette[] = {
     {0,   255, 0,   0x6}, // Green
 };
 
-static inline uint8_t rgb888_to_epd(uint8_t r, uint8_t g, uint8_t b)
+static inline uint8_t rgb888_to_palette_idx(uint8_t r, uint8_t g, uint8_t b)
 {
     uint32_t best_dist = UINT32_MAX;
-    uint8_t  best = 0x1;
-    for (auto &p : palette) {
-        int dr = static_cast<int>(r) - p.r;
-        int dg = static_cast<int>(g) - p.g;
-        int db = static_cast<int>(b) - p.b;
-        uint32_t d = dr * dr + dg * dg + db * db;
-        if (d < best_dist) { best_dist = d; best = p.epd; }
+    uint8_t  best = 1;
+    for (uint8_t i = 0; i < std::size(palette); ++i) {
+        const auto &p = palette[i];
+        const int dr = static_cast<int>(r) - p.r;
+        const int dg = static_cast<int>(g) - p.g;
+        const int db = static_cast<int>(b) - p.b;
+        const uint32_t d = dr * dr + dg * dg + db * db;
+        if (d < best_dist) { best_dist = d; best = i; }
     }
     return best;
 }
@@ -57,7 +64,6 @@ static void set_epd_pixel(uint8_t *fb, const int x,const  int y,const  int w,con
         fb[addr] = (fb[addr] & 0xF0) | (color & 0x0F);
 }
 
-constexpr auto m_size = slint::PhysicalSize({LCD_H_RES, LCD_V_RES});
 auto m_renderer = slint::platform::SoftwareRenderer(slint::platform::SoftwareRenderer::RepaintBufferType::NewBuffer);
 
 /*-----------------------------------------------------------------------
@@ -105,7 +111,14 @@ void epd_platform_init()
 {
     slint::platform::set_platform(std::make_unique<EpdPlatform>());
     ESP_LOGI(TAG, "EpdPlatform installed (%dx%d)", int(m_size.width), int(m_size.height));
+
+    render_buffer = static_cast<slint::Rgb8Pixel*>(heap_caps_malloc(m_size.height * m_size.width * sizeof(slint::Rgb8Pixel), MALLOC_CAP_SPIRAM));
+    if (!render_buffer) {
+        ESP_LOGE(TAG, "Failed to allocate dithering buffer");
+        return;
+    }
 }
+static void apply_floyd_steinberg_dithering();
 
 void epd_platform_render()
 {
@@ -125,24 +138,102 @@ void epd_platform_render()
      * that computes minY/maxY) so the renderer sees an up-to-date state. */
     slint::platform::update_timers_and_animations();
 
-    m_renderer.render_by_line<slint::platform::Rgb565Pixel>(
-            [&](std::size_t line_y, std::size_t line_start, std::size_t line_end,
-                auto &&render_fn) {
-                std::span<slint::platform::Rgb565Pixel> view {
-                        line_buf.data(), line_end - line_start };
-                render_fn(view);
-                for (std::size_t i = 0; i < line_end - line_start; ++i) {
-                    const auto &px = line_buf[i];
-                    /* Expand 5/6/5 to 8 bits. */
-                    uint8_t r = static_cast<uint8_t>((px.r << 3) | (px.r >> 2));
-                    uint8_t g = static_cast<uint8_t>((px.g << 2) | (px.g >> 4));
-                    uint8_t b = static_cast<uint8_t>((px.b << 3) | (px.b >> 2));
-                    set_epd_pixel(fb, static_cast<int>(line_start + i), static_cast<int>(line_y),
-                                  panel_w, rgb888_to_epd(r, g, b));
-                }
-            });
+    std::span rgb8_pixels(render_buffer, m_size.height * m_size.width);
+    // ReSharper disable once CppExpressionWithoutSideEffects
+    m_renderer.render(rgb8_pixels,m_size.width);
+#ifdef DITHERING
+    apply_floyd_steinberg_dithering();
+#else
+    for (int y = 0; y < m_size.height; ++y)
+    {
+        for (int x = 0; x < m_size.width; ++x)
+        {
+            const auto& px = rgb8_pixels[y * m_size.width + x];
+            set_epd_pixel(fb, x, y, panel_w, palette[rgb888_to_palette_idx(px.r, px.g, px.b)].epd);
+        }
+    }
+#endif
 
     ESP_LOGI(TAG, "Flushing e-paper");
     epd_flush_framebuffer(s_epd);
     ESP_LOGI(TAG, "Flush done");
 }
+
+
+static inline int clamp_byte(const int v) {
+    return v < 0 ? 0 : (v > 255 ? 255 : v);
+}
+
+static void apply_floyd_steinberg_dithering()
+{
+    uint8_t* _fb = epd_get_framebuffer(s_epd);
+    ESP_LOGI(TAG, "Applying Floyd-Steinberg dithering...");
+
+    for (int y = 0; y < m_size.height; y++) {
+        // Yield every 20 rows to prevent watchdog
+        if (y % 20 == 0) {
+            vTaskDelay(1);
+        }
+
+        for (int x = 0; x < m_size.width; x++) {
+            int idx = (y * m_size.width + x);
+
+            // Get current pixel RGB
+            int r = render_buffer[idx].r;
+            int g = render_buffer[idx].g;
+            int b = render_buffer[idx].b;
+
+            // Find nearest palette color
+            uint8_t pal_idx = rgb888_to_palette_idx(r, g, b);
+            uint8_t epaper_color;
+            int pal_r, pal_g, pal_b;
+
+
+                epaper_color = palette[pal_idx].epd;
+                pal_r = palette[pal_idx].r;
+                pal_g = palette[pal_idx].g;
+                pal_b = palette[pal_idx].b;
+
+            // Set pixel in framebuffer
+            set_epd_pixel(_fb, x, y, m_size.width, epaper_color);
+
+            // Calculate quantization error
+            int err_r = r - pal_r;
+            int err_g = g - pal_g;
+            int err_b = b - pal_b;
+
+            // Distribute error to neighbors (Floyd-Steinberg)
+            // Right pixel: 7/16
+            if (x + 1 < m_size.width) {
+                int ni = idx + 1;
+                render_buffer[ni].r = clamp_byte(render_buffer[ni].r + err_r * 7 / 16);
+                render_buffer[ni].g = clamp_byte(render_buffer[ni].g + err_g * 7 / 16);
+                render_buffer[ni].b = clamp_byte(render_buffer[ni].b + err_b * 7 / 16);
+            }
+            // Bottom-left pixel: 3/16
+            if (y + 1 < m_size.height && x > 0) {
+                int ni = (y + 1) * m_size.width + x - 1;
+                render_buffer[ni].r = clamp_byte(render_buffer[ni].r + err_r * 3 / 16);
+                render_buffer[ni].g = clamp_byte(render_buffer[ni].g + err_g * 3 / 16);
+                render_buffer[ni].b = clamp_byte(render_buffer[ni].b + err_b * 3 / 16);
+            }
+            // Bottom pixel: 5/16
+            if (y + 1 < m_size.height) {
+                int ni = (y + 1) * m_size.width + x;
+                render_buffer[ni].r = clamp_byte(render_buffer[ni].r + err_r * 5 / 16);
+                render_buffer[ni].g = clamp_byte(render_buffer[ni].g + err_g * 5 / 16);
+                render_buffer[ni].b = clamp_byte(render_buffer[ni].b + err_b * 5 / 16);
+            }
+            // Bottom-right pixel: 1/16
+            if (y + 1 < m_size.height && x + 1 < m_size.width) {
+                int ni = (y + 1) * m_size.width + x + 1;
+                render_buffer[ni].r = clamp_byte(render_buffer[ni].r + err_r / 16);
+                render_buffer[ni].g = clamp_byte(render_buffer[ni].g + err_g / 16);
+                render_buffer[ni].b = clamp_byte(render_buffer[ni].b + err_b / 16);
+            }
+        }
+    }
+
+    ESP_LOGI(TAG, "Dithering complete");
+}
+
