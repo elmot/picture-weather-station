@@ -52,9 +52,8 @@ esp_err_t epd_fill(epd_handle_t handle, uint8_t color);
 /**
  * @brief Update full screen with buffer
  * @param buffer Pixel data (1 bit per pixel, MSB first)
- * @param mode Update mode (full/fast/partial)
  */
-esp_err_t epd_update(epd_handle_t handle, const uint8_t *buffer, epd_update_mode_t mode);
+esp_err_t epd_update(epd_handle_t handle, const uint8_t *buffer);
 
 /**
  * @brief Enter deep sleep mode
@@ -86,7 +85,7 @@ uint8_t* epd_get_framebuffer(epd_handle_t handle);
 /**
  * @brief Flush framebuffer to display
  */
-esp_err_t epd_flush_framebuffer(epd_handle_t handle, epd_update_mode_t mode);
+esp_err_t epd_flush_framebuffer(epd_handle_t handle);
 
 #ifdef __cplusplus
 }

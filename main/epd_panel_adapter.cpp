@@ -90,7 +90,8 @@ static void maybe_flush(epd_adapter_ctx *ctx)
     ctx->last_flush_us = now;
     ctx->refreshing    = true;
     ctx->dirty         = false;
-    epd_flush_framebuffer(ctx->epd, EPD_UPDATE_FULL);
+    epd_flush_framebuffer(ctx->epd);
+    ESP_LOGI(TAG, "Flush returned, asking slint loop to quit");
 
     // The flush above is synchronous — the panel has finished refreshing.
     // One-shot wake-render-sleep cycle: tell Slint to exit ui->run().

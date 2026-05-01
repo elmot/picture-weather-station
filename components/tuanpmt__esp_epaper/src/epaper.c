@@ -9,7 +9,7 @@
 #include "epaper_common.h"
 
 extern esp_err_t acep6c_init(epd_device_t* dev);
-extern esp_err_t acep6c_update(epd_device_t* dev, epd_update_mode_t mode);
+extern esp_err_t acep6c_update(epd_device_t* dev);
 extern esp_err_t acep6c_write_ram(epd_device_t* dev, const uint8_t* data, uint32_t len);
 extern esp_err_t acep6c_sleep(epd_device_t* dev);
 extern esp_err_t acep6c_wake(epd_device_t* dev);
@@ -29,7 +29,6 @@ struct epd_device {
     uint32_t buffer_size;
     uint8_t *framebuffer;
     bool initialized;
-    bool partial_ready;
 };
 
 /*=============================================================================
@@ -54,11 +53,6 @@ uint16_t epd_get_height(epd_device_t *dev)
 const epd_panel_desc_t* epd_get_panel(epd_device_t *dev)
 {
     return dev ? dev->panel : NULL;
-}
-
-bool epd_is_partial_ready(epd_device_t *dev)
-{
-    return dev ? dev->partial_ready : false;
 }
 
 /*=============================================================================
@@ -197,63 +191,31 @@ esp_err_t epd_fill(epd_handle_t handle, uint8_t color)
     epd_device_t *dev = handle;
     memset(dev->framebuffer, color, dev->buffer_size);
 
-    return epd_update(handle, dev->framebuffer, EPD_UPDATE_FULL);
+    return epd_update(handle, dev->framebuffer);
 }
 
-esp_err_t epd_update(epd_handle_t handle, const uint8_t *buffer, epd_update_mode_t mode)
+esp_err_t epd_update(epd_handle_t handle, const uint8_t *buffer)
 {
     if (!handle || !buffer) return ESP_ERR_INVALID_ARG;
 
     epd_device_t *dev = handle;
     esp_err_t ret;
 
-    // Check capabilities and fallback if needed
-    if (mode == EPD_UPDATE_PARTIAL && !epd_panel_has_cap(dev->panel, EPD_CAP_PARTIAL)) {
-        ESP_LOGD(TAG, "Partial not supported, using full refresh");
-        mode = EPD_UPDATE_FULL;
-    }
-    if (mode == EPD_UPDATE_FAST && !epd_panel_has_cap(dev->panel, EPD_CAP_FAST)) {
-        ESP_LOGD(TAG, "Fast not supported, using full refresh");
-        mode = EPD_UPDATE_FULL;
-    }
-
     // Copy to framebuffer
     memcpy(dev->framebuffer, buffer, dev->buffer_size);
 
-    // For partial mode on first call, do a full refresh to set base image
-    if (mode == EPD_UPDATE_PARTIAL && !dev->partial_ready) {
-        if (!dev->initialized) {
-            ret = acep6c_init(dev);
-            if (ret != ESP_OK) return ret;
-            dev->initialized = true;
-        }
-
-        ret = acep6c_write_ram(dev, buffer, dev->buffer_size);
+    if (!dev->initialized)
+    {
+        ret = acep6c_init(dev);
         if (ret != ESP_OK) return ret;
-
-        ret = acep6c_update(dev, EPD_UPDATE_FULL);
-        if (ret != ESP_OK) return ret;
-
-        dev->partial_ready = true;
-        ESP_LOGI(TAG, "Partial mode ready");
-        return ESP_OK;
-    }
-
-    // Full refresh resets partial mode
-    if (mode == EPD_UPDATE_FULL) {
-        dev->partial_ready = false;
-        if (!dev->initialized) {
-            ret = acep6c_init(dev);
-            if (ret != ESP_OK) return ret;
-            dev->initialized = true;
-        }
+        dev->initialized = true;
     }
 
     // Write RAM and update
     ret = acep6c_write_ram(dev, buffer, dev->buffer_size);
     if (ret != ESP_OK) return ret;
 
-    return acep6c_update(dev, mode);
+    return acep6c_update(dev);
 }
 
 
@@ -292,9 +254,9 @@ uint8_t* epd_get_framebuffer(epd_handle_t handle)
     return handle->framebuffer;
 }
 
-esp_err_t epd_flush_framebuffer(epd_handle_t handle, epd_update_mode_t mode)
+esp_err_t epd_flush_framebuffer(epd_handle_t handle)
 {
     if (!handle) return ESP_ERR_INVALID_ARG;
-    return epd_update(handle, handle->framebuffer, mode);
+    return epd_update(handle, handle->framebuffer);
 }
 

@@ -21,7 +21,7 @@
 
 // ACeP 6-color controller
 extern esp_err_t acep6c_init(epd_device_t* dev);
-extern esp_err_t acep6c_update(epd_device_t* dev, epd_update_mode_t mode);
+extern esp_err_t acep6c_update(epd_device_t* dev);
 extern esp_err_t acep6c_write_ram(epd_device_t* dev, const uint8_t* data, uint32_t len);
 extern esp_err_t acep6c_sleep(epd_device_t* dev);
 extern esp_err_t acep6c_wake(epd_device_t* dev);

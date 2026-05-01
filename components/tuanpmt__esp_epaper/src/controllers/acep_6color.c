@@ -105,9 +105,8 @@ esp_err_t acep6c_init(epd_device_t *dev)
  * Update (only full refresh supported)
  *============================================================================*/
 
-esp_err_t acep6c_update(epd_device_t *dev, epd_update_mode_t mode)
+esp_err_t acep6c_update(epd_device_t *dev)
 {
-    (void)mode;  // Only full refresh supported
 
     epd_spi_t *spi = epd_get_spi(dev);
 

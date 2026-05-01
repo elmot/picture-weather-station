@@ -51,13 +51,6 @@ typedef enum {
     EPD_DITHER_ORDERED,         // Ordered/Bayer dithering
 } epd_dither_mode_t;
 
-// Update mode
-typedef enum {
-    EPD_UPDATE_FULL = 0,        // Full refresh
-    EPD_UPDATE_FAST,            // Fast refresh
-    EPD_UPDATE_PARTIAL,         // Partial refresh
-} epd_update_mode_t;
-
 // Pin configuration
 typedef struct {
     int busy;

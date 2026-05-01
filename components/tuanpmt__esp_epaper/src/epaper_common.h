@@ -17,7 +17,6 @@ epd_spi_t* epd_get_spi(epd_device_t *dev);
 uint16_t epd_get_width(epd_device_t *dev);
 uint16_t epd_get_height(epd_device_t *dev);
 const epd_panel_desc_t* epd_get_panel(epd_device_t *dev);
-bool epd_is_partial_ready(epd_device_t *dev);
 
 /*=============================================================================
  * Common SPI Macros
