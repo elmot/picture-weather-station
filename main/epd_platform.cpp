@@ -136,7 +136,7 @@ void epd_platform_render()
         for (int x = 0; x < m_size.width; ++x)
         {
             const auto& px = rgb8_pixels[y * m_size.width + x];
-            set_epd_pixel(fb, x, y, panel_w, palette[rgb888_to_palette_idx(px.r, px.g, px.b)].epd);
+            set_epd_pixel(fb, m_size.width - x, m_size.height - y, panel_w, palette[rgb888_to_palette_idx(px.r, px.g, px.b)].epd);
         }
     }
 #endif
@@ -182,7 +182,7 @@ static void apply_floyd_steinberg_dithering()
                 pal_b = palette[pal_idx].b;
 
             // Set pixel in framebuffer
-            set_epd_pixel(_fb, x, y, m_size.width, epaper_color);
+            set_epd_pixel(_fb, m_size.width - x, m_size.height - y, m_size.width, epaper_color);
 
             // Calculate quantization error
             int err_r = r - pal_r;
