@@ -1,0 +1,43 @@
+export component ChargeIndicator {
+    in property <bool> charging: false;
+    in property <percent> charge: 89%;
+    height: 40px;
+    width: 100px;
+    private property <color> b_color: charging == true ? blue : charge < 7% ? red : charge < 20% ? yellow : #00FF00;
+
+    Rectangle {
+        background: b_color;
+        x: 1px;
+        width: parent.width * 10% + 1px;
+        y: parent.height * 25%;
+        height: parent.height * 50%;
+        border-width: 1px;
+        border-color: black;
+    }
+
+    Rectangle {
+        background: white;
+        width: parent.width * 90% - 2px;
+        height: parent.height - 2px;
+        x: parent.width - self.width - 1px;
+        y: 1px;
+        border-width: 1px;
+        border-color: black;
+        Rectangle {
+            background: b_color;
+            width: (parent.width - 2px) * charge;
+            x: parent.width - self.width - 1px;
+            y: 1px;
+            height: parent.height - 2px;
+        }
+
+        Text {
+            x: parent.width * 10%;
+            width: parent.width * 90%;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            font-size: parent.height * 0.7;
+            text: "\{(charge * 100).to-fixed(0)}%";
+        }
+    }
+}

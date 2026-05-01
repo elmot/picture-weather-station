@@ -15,7 +15,16 @@ void Custom_PmicRegisterInit();
 [[noreturn]]void Axp2101_isChargingTask(void *arg);
 
 /* New power-management helpers. */
+struct battery_status_t
+{
+    unsigned short batteryVoltageMV;
+    unsigned short batteryPercent;
+    bool charging;
+};
+extern volatile battery_status_t battery_status;
+
 void power_gpio_init();          /* configure 45/42/3, install GPIO3→42 ISR */
-void power_log_battery();        /* one-shot dump of PMIC charge/battery state */
+void power_read_battery();   /* one-shot dump of PMIC charge/battery state */
 void power_log_boot_reason();    /* log esp_reset_reason + wake cause at boot */
 void power_pre_deep_sleep();     /* DC4 off, GPIO45 driven high & held for sleep */
+

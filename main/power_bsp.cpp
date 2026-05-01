@@ -173,16 +173,18 @@ void power_gpio_init(void)
     gpio_isr_handler_add(AXP2101_CHGLED_PIN, chgled_mirror_isr, nullptr);
 }
 
+volatile battery_status_t battery_status{};
+
 /*-----------------------------------------------------------------------
  * One-shot battery / charger state dump.
  *---------------------------------------------------------------------*/
-void power_log_battery()
+void power_read_battery()
 {
     bool charging = axp2101.isCharging();
     uint16_t v_batt = axp2101.getBattVoltage();
     uint16_t v_vbus = axp2101.getVbusVoltage();
     uint16_t v_sys  = axp2101.getSystemVoltage();
-    int      pct    = axp2101.getBatteryPercent();
+    unsigned short pct    = axp2101.getBatteryPercent();
     uint8_t  cs     = axp2101.getChargerStatus();
     const char *cs_str;
     switch (cs) {
@@ -196,6 +198,9 @@ void power_log_battery()
     }
     ESP_LOGI(TAG, "Battery: %dmV (%d%%), VBUS=%dmV, VSYS=%dmV, charging=%s, status=%s",
              v_batt, pct, v_vbus, v_sys, charging ? "yes" : "no", cs_str);
+    battery_status.batteryVoltageMV = v_batt;
+    battery_status.batteryPercent = pct;
+    battery_status.charging = charging;
 }
 
 /*-----------------------------------------------------------------------

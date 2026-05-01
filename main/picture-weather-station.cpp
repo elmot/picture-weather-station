@@ -21,7 +21,7 @@ bool ruuvi_wait_for_sample(uint32_t timeout_ms);
 
 extern "C" {
 void shtc3_init(void);
-bool shtc3_read_once(float* t, float* h);
+bool shtc3_read_once(float *t, float *h);
 void wifi_start(void);
 bool wifi_wait_connected(uint32_t timeout_ms);
 void wifi_fetch_remote_data(void);
@@ -134,8 +134,15 @@ static void populate_ui(const slint::ComponentHandle<WeatherStation>& ui, bool w
         std::vector<float> cv(chart.values, chart.values + chart.count);
         ui->set_co2_history(std::make_shared<slint::VectorModel<float>>(cv));
     }
+    /* Charge indicator */
+    {
+        ui->set_charge(battery_status.batteryPercent);
+        const bool charging = battery_status.charging;
+        ui->set_charging(charging);
+    }
 }
 
+bool light_sleep_while_waiting_for_display = false;
 /*-----------------------------------------------------------------------
  * app_main — one wake/render cycle, then 30-min deep sleep.
  *---------------------------------------------------------------------*/
@@ -153,7 +160,7 @@ extern "C" void app_main(void)
     ESP_ERROR_CHECK(ret);
 
     hw_init();
-    power_log_battery();
+    power_read_battery();
 
     /* Restore SHTC3 chart history from RTC slow memory (no-op on cold boot). */
     rtc_history_restore(g_shtc3_history);
@@ -198,6 +205,7 @@ extern "C" void app_main(void)
     ui->show();
 
     ESP_LOGI(TAG, "Rendering UI");
+    light_sleep_while_waiting_for_display = true;
     epd_platform_render();
     ui->hide();
     ESP_LOGI(TAG, "Render complete");
@@ -211,4 +219,15 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, "Entering deep sleep for 30 minutes");
     esp_sleep_enable_timer_wakeup(SLEEP_DURATION_US);
     esp_deep_sleep_start();
+}
+
+extern "C" void epd_sleep_idle();
+
+extern "C" void epd_idle(uint32_t ms)
+{
+    if (light_sleep_while_waiting_for_display)
+    {
+        epd_sleep_idle();
+    }
+    else vTaskDelay(pdMS_TO_TICKS(ms));
 }
