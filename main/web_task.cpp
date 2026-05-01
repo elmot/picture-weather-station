@@ -311,12 +311,13 @@ static void adafruit_io_chart_fetch()
         if (!val) continue;
         if (const char* s = cJSON_GetStringValue(val))
         {
-            chart.values[chart.count++] = strtof(s, nullptr);
+            chart.values[chart.count] = strtof(s, nullptr);
         }
         else if (cJSON_IsNumber(val))
         {
-            chart.values[chart.count++] = static_cast<float>(cJSON_GetNumberValue(val));
+            chart.values[chart.count] = static_cast<float>(cJSON_GetNumberValue(val));
         }
+        chart.count++;
     }
 
     cJSON_Delete(root);

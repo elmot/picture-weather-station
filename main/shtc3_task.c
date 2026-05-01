@@ -2,13 +2,12 @@
 #include "esp_log.h"
 #include "driver/i2c_master.h"
 #include "shtc3.h"
-#include "datastreams.h"
 
 static const char *TAG = "sensor-ws";
 
 extern i2c_master_bus_handle_t s_i2c_bus;
 
-static i2c_master_dev_handle_t s_shtc3 = NULL;
+static i2c_master_dev_handle_t s_shtc3 = nullptr;
 
 void shtc3_init(void)
 {

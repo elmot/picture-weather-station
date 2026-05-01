@@ -2,7 +2,7 @@ import "NotoSans-Bold.ttf";
 import { HorizontalBox } from "std-widgets.slint";
 import { DataWidget } from "./data-widget.slint";
 import { WeatherIcon } from "./weather-icon.slint";
-import { Chart, ChartSupport } from "./chart.slint";
+import { Chart, ChartSupport} from "./chart.slint";
 export { ChartSupport }
 export enum FoxConditionEnum { cloudy, foggy,good, rainy, snowy, sunny, windy, net_fail }
 
@@ -29,7 +29,8 @@ export component WeatherStation inherits Window {
     in property <LocalData> indoor-data: { relHumidity:0.0001, tempC:-10.00001 };
     in property <AdaIoData> adafruit-data: { value: 333.33455453, connFail: true };
     in property <RuuviData> roovi-data: { relHumidity: 0.0001, tempC: 0.0001, atmPHgmm: 0.0001, battV: 2.7, connFail: true };
-    in property <[float]> chart-history;
+    in property <[float]> co2-history;
+    in property <[float]> pressure-history;
     in property <OpenMeteoData> meteo-data: {
         tempC: -15.6777,
         tempFeelsC: -18.788878,
@@ -38,6 +39,8 @@ export component WeatherStation inherits Window {
         windDir: "NW",
         connFail: true
     };
+    in property <bool> charging;
+    in property <percent> charge;
     private property <physical-length> main-font-size: 18px;
     private property <physical-length> reg-widget-width:73px;
     default-font-weight: 1000;
@@ -225,10 +228,22 @@ export component WeatherStation inherits Window {
         y: 280px;
         width: parent.width - self.x;
         gridColor: white;
-        lineColor: yellow;
+        lineColor: white;
         height: 200px;
         background: #0000FF;
-        data: chart-history;
+        data: co2-history;
+    }
+
+    Chart {
+        x: 580px;
+        y: 100px;
+        width: parent.width - self.x;
+        height: 140px;
+		gridCols: 6;
+        background: #C0E0FF;
+        lineColor: black;
+        gridColor: black;
+        data: co2-history;
     }
 
     Rectangle {
@@ -237,5 +252,14 @@ export component WeatherStation inherits Window {
         y: 250px;
         height: 2px;
         background: black;
+    }
+
+    ChargeIndicator {
+	 x:3px;
+	 y: parent.height - self.height - 3px;
+     charging: charging;
+     charge: charge;
+	 width: 50px;
+	 height: 20px;
     }
 }

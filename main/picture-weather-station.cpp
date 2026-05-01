@@ -16,11 +16,12 @@
 #include "rtc_state.h"
 #include "epd_platform.h"
 
-extern "C" {
 void ruuvi_task_init(void);
 bool ruuvi_wait_for_sample(uint32_t timeout_ms);
+
+extern "C" {
 void shtc3_init(void);
-bool shtc3_read_once(float *t, float *h);
+bool shtc3_read_once(float* t, float* h);
 void wifi_start(void);
 bool wifi_wait_connected(uint32_t timeout_ms);
 void wifi_fetch_remote_data(void);
@@ -39,7 +40,7 @@ SensorHistory<adafruit_data_t, 1> g_adafruit_history{};
 SensorHistory<chart_data_t, 1> g_chart_history{};
 SensorHistory<shtc3_reading_t, 96> g_shtc3_history{};
 
-extern "C" void pushRuuviData(const ruuvi_data_t* data)
+void pushRuuviData(const ruuvi_data_t* data)
 {
     g_ruuvi_history.push(*data);
 }
@@ -131,7 +132,7 @@ static void populate_ui(const slint::ComponentHandle<WeatherStation>& ui, bool w
     {
         auto chart = g_chart_history.last();
         std::vector<float> cv(chart.values, chart.values + chart.count);
-        ui->set_chart_history(std::make_shared<slint::VectorModel<float>>(cv));
+        ui->set_co2_history(std::make_shared<slint::VectorModel<float>>(cv));
     }
 }
 

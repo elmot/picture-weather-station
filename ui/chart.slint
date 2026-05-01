@@ -1,7 +1,9 @@
-
-
 export global ChartSupport {
-    pure callback renderChart(w: int, h: int, data: [float], min: float, max: float, lineColor: color, gridColor: color, gridRowNumber: int, autoGridRowNumber: int, gridColNumber: int) -> image;
+    pure callback renderChart(
+    	w: int, h: int,
+    	data: [float], min: float, max: float,
+		lineColor: color, gridColor: color,
+	  	gridRowNumber: int, autoGridRowNumber: int, gridColNumber: int) -> image;
     pure callback calcLimits(data: [float]) -> [float];
 }
 

@@ -84,11 +84,13 @@ epd_handle_t epaper_handle()
  * BUSY pin transition is detected on the next poll.
  *---------------------------------------------------------------------*/
 
-extern "C" void epd_idle(uint32_t /*ms*/)
+extern "C" void epd_sleep_idle()
 {
     esp_sleep_enable_timer_wakeup(300ULL * 1000ULL);  /* 300 ms */
     gpio_hold_en(POWER_MCU_ACTIVE_PIN);
+    gpio_hold_en(POWER_CHGLED_MIRROR_PIN);
     esp_light_sleep_start();
     gpio_hold_dis(POWER_MCU_ACTIVE_PIN);
+    gpio_hold_dis(POWER_CHGLED_MIRROR_PIN);
 }
 

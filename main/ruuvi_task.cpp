@@ -115,10 +115,13 @@ static void ble_on_sync(void)
     ESP_LOGI(TAG, "BLE host synced, starting active scan");
 
     struct ble_gap_disc_params scan_params = {
-        .passive = 0, /* active scan to get scan responses with name */
         .itvl = 0, /* use defaults */
         .window = 0,
+        .filter_policy = 0,
+        .limited = 0,
+        .passive = 0, /* active scan to get scan responses with name */
         .filter_duplicates = 0,
+        .disable_observer_mode = 0
     };
     int rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER,
                           &scan_params, ble_gap_event_cb, NULL);

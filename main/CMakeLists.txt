@@ -7,7 +7,7 @@
                     XPowersLibInterface.cpp
                     epd_platform.cpp
                     shtc3_task.c
-                    ruuvi_task.c
+                    ruuvi_task.cpp
                     web_task.cpp
                     chart.cpp
                     wifi_helper.c

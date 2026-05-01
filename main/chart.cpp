@@ -7,16 +7,16 @@
  * Simple chart renderer — draws a value history into an image
  *---------------------------------------------------------------------*/
 
-static void draw_line(slint::Rgba8Pixel* buf, int w, int h,
-                      int x0, int y0, int x1, int y1, const slint::Rgba8Pixel& color)
+static void draw_line(slint::Rgba8Pixel* buf, const int w, const int h,
+                      int x0, int y0, const int x1, const int y1, const slint::Color& color)
 {
-    int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-    int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+    const int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+    const int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     int err = dx + dy;
     for (;;)
     {
         if (x0 >= 0 && x0 < w && y0 >= 0 && y0 < h)
-            buf[y0 * w + x0] = color;
+            buf[y0 * w + x0] = slint::Rgba8Pixel(color.red(), color.green(), color.blue(), color.alpha());
         if (x0 == x1 && y0 == y1) break;
         int e2 = 2 * err;
         if (e2 >= dy)
@@ -35,14 +35,13 @@ static void draw_line(slint::Rgba8Pixel* buf, int w, int h,
 slint::Image ChartSupportCodeBase::render_chart(const int w, const int h,
                                                 const std::shared_ptr<slint::Model<float>>& data,
                                                 float minY, float maxY,
-                                                const slint::Color& lineColor, const slint::
-                                                Color& gridColor,
+                                                const slint::Color& lineColor, const slint::Color& gridColor,
                                                 int gridRows, const int autoGridRows,
                                                 const int gridCols)
 {
     if (data == nullptr) return {};
-    slint::SharedPixelBuffer<slint::Rgba8Pixel> pxbuf(w, h);
-    auto* px = pxbuf.begin();
+    slint::SharedPixelBuffer<slint::Rgba8Pixel> pxBuf(w, h);
+    auto* px = pxBuf.begin();
 
     /* Clear to transparent */
     memset(px, 0, w * h * sizeof(slint::Rgba8Pixel));
@@ -77,7 +76,7 @@ slint::Image ChartSupportCodeBase::render_chart(const int w, const int h,
     }
 
     const unsigned int count = data->row_count();
-    if (count < 2) return {pxbuf};
+    if (count < 2) return {pxBuf};
 
     float range = maxY - minY;
     if (range < 0.0001f) range = 0.0001f;
@@ -86,19 +85,21 @@ slint::Image ChartSupportCodeBase::render_chart(const int w, const int h,
     int prev_x = -1, prev_y = -1;
     for (int i = 0; i < count; i++)
     {
-        const slint::Rgba8Pixel linePx{lineColor.red(), lineColor.green(), lineColor.blue(), lineColor.alpha()};
         const int x = i * (w - 1) / (static_cast<int>(count) - 1);
+        const auto value = data.get()->row_data(i).value_or(0.0f);
         int y = h - 1 - static_cast<int>(
-            (data.get()->row_data(i).value_or(0.0f) - minY) / range * static_cast<float>(h - 1));
+            (value - minY) / range * static_cast<float>(h - 1));
         y = std::clamp(y, 0, h - 1);
 
         if (prev_x >= 0)
-            draw_line(px, w, h, prev_x, prev_y, x, y, linePx);
+        {
+            draw_line(px, w, h, prev_x, prev_y, x, y, lineColor);
+        }
         prev_x = x;
         prev_y = y;
     }
 
-    return {pxbuf};
+    return {pxBuf};
 }
 
 std::shared_ptr<slint::Model<float>> ChartSupportCodeBase::calcBounds(const std::shared_ptr<slint::Model<float>>& data)
