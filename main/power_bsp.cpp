@@ -12,8 +12,8 @@ static const char *TAG = "axp2101";
 
 static XPowersPMU axp2101;
 
-static I2cMasterBus           *i2cbus_   = NULL;
-static i2c_master_dev_handle_t i2cPMICdev = NULL;
+static I2cMasterBus           *i2cbus_   = nullptr;
+static i2c_master_dev_handle_t i2cPMICdev = nullptr;
 static uint8_t                 i2cPMICAddress;
 
 static int AXP2101_SLAVE_Read(uint8_t devAddr, uint8_t regAddr, uint8_t *data, uint8_t len) {
@@ -55,10 +55,10 @@ void Custom_PmicPortGpioInit() {
 }
 
 void Custom_PmicPortInit(I2cMasterBus *i2cbus,uint8_t dev_addr) {
-    if(i2cbus_ == NULL) {
+    if(i2cbus_ == nullptr) {
         i2cbus_ = i2cbus;
     }
-    if(i2cPMICdev == NULL) {
+    if(i2cPMICdev == nullptr) {
         i2c_master_bus_handle_t BusHandle = i2cbus_->Get_I2cBusHandle();
         i2c_device_config_t     dev_cfg   = {};
         dev_cfg.dev_addr_length           = I2C_ADDR_BIT_LEN_7;
@@ -146,6 +146,16 @@ void power_gpio_init(void)
     in_conf.pull_up_en   = GPIO_PULLUP_ENABLE;
     gpio_config(&in_conf);
 
+    /* GPIO5: external wake input. Idle low (pull-down), woken on rising
+     * edge by esp_deep_sleep_enable_gpio_wakeup() configured at sleep entry. */
+    gpio_config_t wake_conf = {};
+    wake_conf.intr_type    = GPIO_INTR_DISABLE;
+    wake_conf.mode         = GPIO_MODE_INPUT;
+    wake_conf.pin_bit_mask = 1ULL << POWER_WAKE_PIN;
+    wake_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
+    wake_conf.pull_up_en   = GPIO_PULLUP_DISABLE;
+    gpio_config(&wake_conf);
+
     /* Initial mirror state. */
     gpio_set_level(POWER_CHGLED_MIRROR_PIN,
                    gpio_get_level(AXP2101_CHGLED_PIN));
@@ -157,13 +167,13 @@ void power_gpio_init(void)
         ESP_LOGE(TAG, "gpio_install_isr_service: %s", esp_err_to_name(err));
         return;
     }
-    gpio_isr_handler_add(AXP2101_CHGLED_PIN, chgled_mirror_isr, NULL);
+    gpio_isr_handler_add(AXP2101_CHGLED_PIN, chgled_mirror_isr, nullptr);
 }
 
 /*-----------------------------------------------------------------------
  * One-shot battery / charger state dump.
  *---------------------------------------------------------------------*/
-void power_log_battery(void)
+void power_log_battery()
 {
     bool charging = axp2101.isCharging();
     uint16_t v_batt = axp2101.getBattVoltage();
@@ -171,7 +181,7 @@ void power_log_battery(void)
     uint16_t v_sys  = axp2101.getSystemVoltage();
     int      pct    = axp2101.getBatteryPercent();
     uint8_t  cs     = axp2101.getChargerStatus();
-    const char *cs_str = "unknown";
+    const char *cs_str;
     switch (cs) {
         case XPOWERS_AXP2101_CHG_TRI_STATE:  cs_str = "tri-charge";       break;
         case XPOWERS_AXP2101_CHG_PRE_STATE:  cs_str = "pre-charge";       break;
@@ -179,6 +189,7 @@ void power_log_battery(void)
         case XPOWERS_AXP2101_CHG_CV_STATE:   cs_str = "constant voltage"; break;
         case XPOWERS_AXP2101_CHG_DONE_STATE: cs_str = "done";             break;
         case XPOWERS_AXP2101_CHG_STOP_STATE: cs_str = "not charging";     break;
+        default: cs_str = "unknown"; break;
     }
     ESP_LOGI(TAG, "Battery: %dmV (%d%%), VBUS=%dmV, VSYS=%dmV, charging=%s, status=%s",
              v_batt, pct, v_vbus, v_sys, charging ? "yes" : "no", cs_str);
@@ -210,60 +221,9 @@ void power_pre_deep_sleep(void)
     gpio_hold_en(POWER_MCU_ACTIVE_PIN);
     gpio_deep_sleep_hold_en();
     ESP_LOGI(TAG, "GPIO%d held high for deep sleep", POWER_MCU_ACTIVE_PIN);
+
+    /* Wake the chip when the external GPIO5 line goes high. */
+    ESP_ERROR_CHECK(esp_sleep_enable_ext0_wakeup(POWER_WAKE_PIN, 1));
+    ESP_LOGI(TAG, "Wake on GPIO%d HIGH armed", POWER_WAKE_PIN);
 }
 
-void Axp2101_isChargingTask(void *arg) {
-    for (;;) {
-        vTaskDelay(pdMS_TO_TICKS(20000));
-        ESP_LOGI(TAG, "isCharging: %s", axp2101.isCharging() ? "YES" : "NO");
-        uint8_t charge_status = axp2101.getChargerStatus();
-        if (charge_status == XPOWERS_AXP2101_CHG_TRI_STATE) {
-            ESP_LOGI(TAG, "Charger Status: tri_charge");
-        } else if (charge_status == XPOWERS_AXP2101_CHG_PRE_STATE) {
-            ESP_LOGI(TAG, "Charger Status: pre_charge");
-        } else if (charge_status == XPOWERS_AXP2101_CHG_CC_STATE) {
-            ESP_LOGI(TAG, "Charger Status: constant charge");
-        } else if (charge_status == XPOWERS_AXP2101_CHG_CV_STATE) {
-            ESP_LOGI(TAG, "Charger Status: constant voltage");
-        } else if (charge_status == XPOWERS_AXP2101_CHG_DONE_STATE) {
-            ESP_LOGI(TAG, "Charger Status: charge done");
-        } else if (charge_status == XPOWERS_AXP2101_CHG_STOP_STATE) {
-            ESP_LOGI(TAG, "Charger Status: not charge");
-        }
-        ESP_LOGI(TAG, "getBattVoltage: %dmV", axp2101.getBattVoltage());
-        ESP_LOGI(TAG, "getBatteryPercent: %d%%", axp2101.getBatteryPercent());
-    }
-}
-
-PmicRegisterConfig Custom_PmicGetBatteryInfo(void) {
-    PmicRegisterConfig config;
-    int data = axp2101.readRegister(0x17);
-    if(data > 0) {
-        axp2101.writeRegister(0x17,(uint8_t)(data & 0xFB));
-    }
-    bool is_charging = axp2101.isCharging();
-    if(is_charging) {
-        strcpy(config.isCharging, "Battery Status : Charging");
-    } else {
-        strcpy(config.isCharging, "Battery Status : Not Charging");
-    }
-    uint8_t charge_status = axp2101.getChargerStatus();
-    if (charge_status == XPOWERS_AXP2101_CHG_TRI_STATE) {
-        strcpy(config.chargeStatus, "Charging Status : Tri_Charge");
-    } else if (charge_status == XPOWERS_AXP2101_CHG_PRE_STATE) {
-        strcpy(config.chargeStatus, "Charging Status : Pre_Charge");
-    } else if (charge_status == XPOWERS_AXP2101_CHG_CC_STATE) {
-        strcpy(config.chargeStatus, "Charging Status : Constant_Charge");
-    } else if (charge_status == XPOWERS_AXP2101_CHG_CV_STATE) {
-        strcpy(config.chargeStatus, "Charging Status : Constant_Voltage");
-    } else if (charge_status == XPOWERS_AXP2101_CHG_DONE_STATE) {
-        strcpy(config.chargeStatus, "Charging Status : Charge_Done");
-    } else if (charge_status == XPOWERS_AXP2101_CHG_STOP_STATE) {
-        strcpy(config.chargeStatus, "Charging Status : Not_Charging");
-    }
-    uint16_t battery_voltage = axp2101.getBattVoltage();
-    snprintf(config.batteryVoltage, sizeof(config.batteryVoltage), "Battery Voltage : %dmV", battery_voltage);
-    int battery_percent = axp2101.getBatteryPercent();
-    snprintf(config.batteryPercent, sizeof(config.batteryPercent), "Battery Percent : %d%%", battery_percent);
-    return config;
-}

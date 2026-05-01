@@ -19,7 +19,7 @@ void hw_init(void);
 
 void epaper_sleep(void);
 
-epd_handle_t epaper_handle(void);
+extern epd_handle_t s_epd;
 
 #ifdef __cplusplus
 }

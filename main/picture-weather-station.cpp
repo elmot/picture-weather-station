@@ -155,7 +155,7 @@ extern "C" void app_main(void)
 
     /* Custom slint platform — renders to the e-paper framebuffer, no event
      * loop, no tasks, no semaphores. */
-    epd_platform_init(epaper_handle(), slint::PhysicalSize({LCD_H_RES, LCD_V_RES}));
+    epd_platform_init();
 
     g_meteo_queue = xQueueCreate(1, sizeof(meteo_data_t));
 
