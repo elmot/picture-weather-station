@@ -8,15 +8,37 @@
  *---------------------------------------------------------------------*/
 
 static void draw_line(slint::Rgba8Pixel* buf, const int w, const int h,
-                      int x0, int y0, const int x1, const int y1, const slint::Color& color)
+                      int x0, int y0, const int x1, const int y1, const slint::Color& color,
+                      int thickness)
 {
     const int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
     const int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     int err = dx + dy;
+    const slint::Rgba8Pixel pixel{color.red(), color.green(), color.blue(), color.alpha()};
+
     for (;;)
     {
-        if (x0 >= 0 && x0 < w && y0 >= 0 && y0 < h)
-            buf[y0 * w + x0] = slint::Rgba8Pixel(color.red(), color.green(), color.blue(), color.alpha());
+        if (thickness <= 1)
+        {
+            if (x0 >= 0 && x0 < w && y0 >= 0 && y0 < h)
+                buf[y0 * w + x0] = pixel;
+        }
+        else
+        {
+            int r = thickness / 2;
+            for (int dy2 = -r; dy2 <= r; dy2++)
+            {
+                for (int dx2 = -r; dx2 <= r; dx2++)
+                {
+                    int nx = x0 + dx2;
+                    int ny = y0 + dy2;
+                    if (nx >= 0 && nx < w && ny >= 0 && ny < h)
+                    {
+                        buf[ny * w + nx] = pixel;
+                    }
+                }
+            }
+        }
         if (x0 == x1 && y0 == y1) break;
         int e2 = 2 * err;
         if (e2 >= dy)
@@ -98,7 +120,7 @@ slint::Image ChartSupportCodeBase::render_chart(const int w, const int h,
 
         if (prev_x >= 0)
         {
-            draw_line(px, w, h, prev_x, prev_y, x, y, lineColor);
+            draw_line(px, w, h, prev_x, prev_y, x, y, lineColor, 2);
         }
         prev_x = x;
         prev_y = y;
