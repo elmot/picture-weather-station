@@ -65,6 +65,7 @@ static void i2c_init()
 
 void hw_init()
 {
+    power_gpio_init();
     i2c_init();
     epaper_init();
 }

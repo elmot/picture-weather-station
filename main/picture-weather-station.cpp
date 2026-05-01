@@ -3,10 +3,12 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
+#include "esp_wifi.h"
 #include "nvs_flash.h"
 #include "weather-station.h"
 #include "datastreams.h"
 #include "hw_support.h"
+#include "power_bsp.h"
 #include "chart.h"
 #include "fox_condition.h"
 #include "sensor_history.h"
@@ -132,6 +134,8 @@ static void populate_ui(const slint::ComponentHandle<WeatherStation>& ui)
  *---------------------------------------------------------------------*/
 extern "C" void app_main(void)
 {
+    power_log_boot_reason();
+
     /* NVS — required by Wi-Fi */
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
@@ -142,6 +146,7 @@ extern "C" void app_main(void)
     ESP_ERROR_CHECK(ret);
 
     hw_init();
+    power_log_battery();
 
     /* Restore SHTC3 chart history from RTC slow memory (no-op on cold boot). */
     rtc_history_restore(g_shtc3_history);
@@ -189,6 +194,13 @@ extern "C" void app_main(void)
     /* Persist chart history and put the panel + SoC to sleep. */
     rtc_history_save(g_shtc3_history);
     epaper_sleep();
+
+    /* Stop Wi-Fi to clear PHY calibration cleanly. NimBLE is left alone —
+     * deep sleep powers the controller down and wipes RAM regardless. */
+    esp_wifi_stop();
+    esp_wifi_deinit();
+
+    power_pre_deep_sleep();
 
     ESP_LOGI(TAG, "Entering deep sleep for 30 minutes");
     esp_sleep_enable_timer_wakeup(SLEEP_DURATION_US);

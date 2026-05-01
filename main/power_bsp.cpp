@@ -4,6 +4,7 @@
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_sleep.h>
+#include <esp_system.h>
 #include "power_bsp.h"
 #include "XPowersLib.h"
 
@@ -102,6 +103,113 @@ void Custom_PmicRegisterInit(void) {
     axp2101.setPrechargeCurr(XPOWERS_AXP2101_PRECHARGE_50MA);
     axp2101.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_500MA);
     axp2101.setChargerTerminationCurr(XPOWERS_AXP2101_CHG_ITERM_25MA);
+
+    /* DC3 is unused on this board — keep it off so it never powers a rail. */
+    if (axp2101.isEnableDC3()) {
+        axp2101.disableDC3();
+        ESP_LOGW("axp2101_init_log", "Disabled DCDC3");
+    }
+}
+
+/*-----------------------------------------------------------------------
+ * GPIO3 (AXP2101 CHG_LED) → GPIO42 (external charge LED) mirror.
+ * The ISR fires on either edge of GPIO3 and copies the level to GPIO42.
+ *---------------------------------------------------------------------*/
+static void IRAM_ATTR chgled_mirror_isr(void *)
+{
+    gpio_set_level(POWER_CHGLED_MIRROR_PIN,
+                   gpio_get_level(AXP2101_CHGLED_PIN));
+}
+
+void power_gpio_init(void)
+{
+    /* GPIO45: output, drive low while MCU is awake. */
+    gpio_config_t out_conf = {};
+    out_conf.intr_type    = GPIO_INTR_DISABLE;
+    out_conf.mode         = GPIO_MODE_OUTPUT;
+    out_conf.pin_bit_mask = (1ULL << POWER_MCU_ACTIVE_PIN)
+                          | (1ULL << POWER_CHGLED_MIRROR_PIN);
+    out_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    out_conf.pull_up_en   = GPIO_PULLUP_DISABLE;
+    gpio_config(&out_conf);
+
+    /* Releasing any hold left over from a previous deep-sleep cycle. */
+    gpio_hold_dis(POWER_MCU_ACTIVE_PIN);
+    gpio_set_level(POWER_MCU_ACTIVE_PIN, 0);
+
+    /* GPIO3: input, any-edge interrupt for the mirror. */
+    gpio_config_t in_conf = {};
+    in_conf.intr_type    = GPIO_INTR_ANYEDGE;
+    in_conf.mode         = GPIO_MODE_INPUT;
+    in_conf.pin_bit_mask = 1ULL << AXP2101_CHGLED_PIN;
+    in_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    in_conf.pull_up_en   = GPIO_PULLUP_ENABLE;
+    gpio_config(&in_conf);
+
+    /* Initial mirror state. */
+    gpio_set_level(POWER_CHGLED_MIRROR_PIN,
+                   gpio_get_level(AXP2101_CHGLED_PIN));
+
+    /* Install ISR service (idempotent — returns ESP_ERR_INVALID_STATE if
+     * already installed). */
+    esp_err_t err = gpio_install_isr_service(0);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "gpio_install_isr_service: %s", esp_err_to_name(err));
+        return;
+    }
+    gpio_isr_handler_add(AXP2101_CHGLED_PIN, chgled_mirror_isr, NULL);
+}
+
+/*-----------------------------------------------------------------------
+ * One-shot battery / charger state dump.
+ *---------------------------------------------------------------------*/
+void power_log_battery(void)
+{
+    bool charging = axp2101.isCharging();
+    uint16_t v_batt = axp2101.getBattVoltage();
+    uint16_t v_vbus = axp2101.getVbusVoltage();
+    uint16_t v_sys  = axp2101.getSystemVoltage();
+    int      pct    = axp2101.getBatteryPercent();
+    uint8_t  cs     = axp2101.getChargerStatus();
+    const char *cs_str = "unknown";
+    switch (cs) {
+        case XPOWERS_AXP2101_CHG_TRI_STATE:  cs_str = "tri-charge";       break;
+        case XPOWERS_AXP2101_CHG_PRE_STATE:  cs_str = "pre-charge";       break;
+        case XPOWERS_AXP2101_CHG_CC_STATE:   cs_str = "constant current"; break;
+        case XPOWERS_AXP2101_CHG_CV_STATE:   cs_str = "constant voltage"; break;
+        case XPOWERS_AXP2101_CHG_DONE_STATE: cs_str = "done";             break;
+        case XPOWERS_AXP2101_CHG_STOP_STATE: cs_str = "not charging";     break;
+    }
+    ESP_LOGI(TAG, "Battery: %dmV (%d%%), VBUS=%dmV, VSYS=%dmV, charging=%s, status=%s",
+             v_batt, pct, v_vbus, v_sys, charging ? "yes" : "no", cs_str);
+}
+
+/*-----------------------------------------------------------------------
+ * Log why we just booted — useful when debugging deep-sleep behaviour.
+ *---------------------------------------------------------------------*/
+void power_log_boot_reason(void)
+{
+    const esp_reset_reason_t r = esp_reset_reason();
+    const uint32_t w = esp_sleep_get_wakeup_causes();
+    ESP_LOGI(TAG, "Boot: reset_reason=%d, wakeup_cause=%d", (int)r, (int)w);
+}
+
+/*-----------------------------------------------------------------------
+ * Last-step preparation before esp_deep_sleep_start():
+ *   - shut DC4 off (per board policy)
+ *   - drive the MCU-active flag GPIO45 high and lock it for sleep
+ *---------------------------------------------------------------------*/
+void power_pre_deep_sleep(void)
+{
+    if (axp2101.isEnableDC4()) {
+        axp2101.disableDC4();
+        ESP_LOGI(TAG, "Disabled DCDC4 before deep sleep");
+    }
+
+    gpio_set_level(POWER_MCU_ACTIVE_PIN, 1);
+    gpio_hold_en(POWER_MCU_ACTIVE_PIN);
+    gpio_deep_sleep_hold_en();
+    ESP_LOGI(TAG, "GPIO%d held high for deep sleep", POWER_MCU_ACTIVE_PIN);
 }
 
 void Axp2101_isChargingTask(void *arg) {
