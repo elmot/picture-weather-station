@@ -4,7 +4,6 @@
 #include "i2c_bsp.h"
 #include "power_bsp.h"
 #include "epaper.h"
-#include "epd_panel_adapter.h"
 
 static const char* TAG = "hw";
 
@@ -17,11 +16,10 @@ static const char* TAG = "hw";
 i2c_master_bus_handle_t s_i2c_bus;
 I2cMasterBus *s_i2c_bus_obj;
 
-esp_lcd_panel_handle_t s_panel;
 epd_handle_t s_epd = nullptr;
 
 /*-----------------------------------------------------------------------
- * Initialise e-paper display + adapter panel for Slint
+ * Initialise the e-paper display
  *---------------------------------------------------------------------*/
 static void epaper_init()
 {
@@ -37,9 +35,6 @@ static void epaper_init()
     epd_get_info(s_epd, &info);
     ESP_LOGI(TAG, "E-paper: %dx%d, buf=%lu bytes", info.width, info.height,
              (unsigned long)info.buffer_size);
-
-    s_panel = epd_panel_adapter_create(s_epd, LCD_H_RES, LCD_V_RES);
-    ESP_LOGI(TAG, "E-paper adapter ready (%dx%d render)", LCD_H_RES, LCD_V_RES);
 }
 
 /*------------------------------------------------------------------------
@@ -73,4 +68,9 @@ void hw_init()
 void epaper_sleep()
 {
   epd_sleep(s_epd);
+}
+
+epd_handle_t epaper_handle()
+{
+    return s_epd;
 }

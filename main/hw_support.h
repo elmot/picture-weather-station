@@ -6,6 +6,7 @@
 #define PICTURE_WEATHER_STATION_HW_H
 
 #include "esp_lcd_types.h"
+#include "epaper.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,11 +15,11 @@ extern "C" {
 #define LCD_H_RES        800
 #define LCD_V_RES        480
 
-extern esp_lcd_panel_handle_t s_panel;
-
 void hw_init(void);
 
 void epaper_sleep(void);
+
+epd_handle_t epaper_handle(void);
 
 #ifdef __cplusplus
 }

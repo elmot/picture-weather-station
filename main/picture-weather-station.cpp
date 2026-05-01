@@ -4,6 +4,7 @@
 #include "esp_log.h"
 #include "esp_sleep.h"
 #include "esp_wifi.h"
+#include "esp_bt.h"
 #include "nvs_flash.h"
 #include "weather-station.h"
 #include "datastreams.h"
@@ -13,6 +14,7 @@
 #include "fox_condition.h"
 #include "sensor_history.h"
 #include "rtc_state.h"
+#include "epd_platform.h"
 
 extern "C" {
 void ruuvi_task_init(void);
@@ -151,13 +153,9 @@ extern "C" void app_main(void)
     /* Restore SHTC3 chart history from RTC slow memory (no-op on cold boot). */
     rtc_history_restore(g_shtc3_history);
 
-    /* Slint platform — line-by-line rendering via the e-paper adapter. */
-    slint_esp_init(SlintPlatformConfiguration<slint::platform::Rgb565Pixel>{
-        .size = slint::PhysicalSize({LCD_H_RES, LCD_V_RES}),
-        .panel_handle = s_panel,
-        .touch_handle = nullptr,
-        .byte_swap = false,
-    });
+    /* Custom slint platform — renders to the e-paper framebuffer, no event
+     * loop, no tasks, no semaphores. */
+    epd_platform_init(epaper_handle(), slint::PhysicalSize({LCD_H_RES, LCD_V_RES}));
 
     g_meteo_queue = xQueueCreate(1, sizeof(meteo_data_t));
 
@@ -182,23 +180,26 @@ extern "C" void app_main(void)
     /* Publish Ruuvi values once we have a fresh sample. */
     if (wifi_ok) wifi_publish_ruuvi();
 
-    /* Build UI, push values, render once. */
+    /* All data is in. Power the radios down NOW — the e-paper refresh
+     * coming next blocks for ~30 s and we don't want Wi-Fi/BT burning
+     * current that whole time. Just disable; deep sleep wipes the rest. */
+    esp_wifi_stop();
+    esp_bt_controller_disable();
+
+    /* Build UI, push values, render once — directly, no event loop. */
     auto ui = WeatherStation::create();
     ChartSupportCode<WeatherStation, ChartSupport>(ui).setup();
     populate_ui(ui);
+    ui->show();
 
     ESP_LOGI(TAG, "Rendering UI");
-    ui->run();   /* exits when epd_panel_adapter calls slint::quit_event_loop() */
+    epd_platform_render();
+    ui->hide();
     ESP_LOGI(TAG, "Render complete");
 
     /* Persist chart history and put the panel + SoC to sleep. */
     rtc_history_save(g_shtc3_history);
     epaper_sleep();
-
-    /* Stop Wi-Fi to clear PHY calibration cleanly. NimBLE is left alone —
-     * deep sleep powers the controller down and wipes RAM regardless. */
-    esp_wifi_stop();
-    esp_wifi_deinit();
 
     power_pre_deep_sleep();
 

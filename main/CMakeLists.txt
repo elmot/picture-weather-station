@@ -5,7 +5,7 @@
                     i2c_bsp.cpp
                     power_bsp.cpp
                     XPowersLibInterface.cpp
-                    epd_panel_adapter.cpp
+                    epd_platform.cpp
                     shtc3_task.c
                     ruuvi_task.c
                     web_task.cpp
