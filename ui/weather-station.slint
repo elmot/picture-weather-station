@@ -1,5 +1,5 @@
 import "NotoSans-Bold.ttf";
-import { HorizontalBox } from "std-widgets.slint";
+import { HorizontalBox, VerticalBox } from "std-widgets.slint";
 import { DataWidget } from "./data-widget.slint";
 import { WeatherIcon } from "./weather-icon.slint";
 import { Chart, ChartSupport } from "./chart.slint";
@@ -214,52 +214,88 @@ export component WeatherStation inherits Window {
     Image {
         x: 0;
         y: 0;
-        source: meteo-data.condition == FoxConditionEnum.net-fail ? @image-url("../pict/pencifox/ready/net_fail.png") : meteo-data.condition == FoxConditionEnum.cloudy ? @image-url("../pict/pencifox/ready/cloudy.png") : meteo-data.condition == FoxConditionEnum.foggy ? @image-url("../pict/pencifox/ready/foggy.png") : meteo-data.condition == FoxConditionEnum.good ? @image-url("../pict/pencifox/ready/good.png") : meteo-data.condition == FoxConditionEnum.rainy ? @image-url("../pict/pencifox/ready/rainy.png") : meteo-data.condition == FoxConditionEnum.snowy ? @image-url("../pict/pencifox/ready/snowy.png") : meteo-data.condition == FoxConditionEnum.sunny ? @image-url("../pict/pencifox/ready/sunny.png") : @image-url("../pict/pencifox/ready/windy.png");
+        source: meteo-data.condition == FoxConditionEnum.net-fail
+        ? @image-url("../pict/pencifox/ready/net_fail.png")
+        : meteo-data.condition == FoxConditionEnum.cloudy ? @image-url("../pict/pencifox/ready/cloudy.png")
+        : meteo-data.condition == FoxConditionEnum.foggy ? @image-url("../pict/pencifox/ready/foggy.png")
+        : meteo-data.condition == FoxConditionEnum.good ? @image-url("../pict/pencifox/ready/good.png")
+        : meteo-data.condition == FoxConditionEnum.rainy ? @image-url("../pict/pencifox/ready/rainy.png")
+        : meteo-data.condition == FoxConditionEnum.snowy ? @image-url("../pict/pencifox/ready/snowy.png")
+        : meteo-data.condition == FoxConditionEnum.sunny ? @image-url("../pict/pencifox/ready/sunny.png")
+        : @image-url("../pict/pencifox/ready/windy.png");
     }
 
-    Text {
-        x: 300px;
-        y: 260px;
-        font-size: 18px;
-//        font-family: "Roboto";
-        text: "Carbone dioxide, ppm, 48hrs";
-    }
-
-    Chart {
-        x: 300px;
-        y: 280px;
-        width: parent.width - self.x;
-        gridColor: white;
-        lineColor: white;
-        height: 200px;
-        background: #0000FF;
-        data: co2-history;
-    }
-
-    Chart {
-        x: 580px;
-        y: 100px;
-        width: parent.width - self.x;
-        height: 140px;
-        gridCols: 6;
-        background: #C0E0FF;
-        lineColor: black;
-        gridColor: black;
-        data: pressure-history;
-    }
-
-    Rectangle {
+    Rectangle { // Splitter
         x: 0;
         width: parent.width;
-        y: 250px;
         height: 2px;
+        y: 250px;
         background: black;
+    }
+
+    VerticalBox { //P
+        x: 320px;
+        y: 260px;
+        width: 250px;
+        height: parent.height - self.y;
+        spacing: 0;
+        padding: 0;
+        Text {
+            font-size: 18px;
+            text: "P, mmHg (48hrs)";
+            color: #0000FF;
+            width: parent.width - self.x;
+        }
+
+        Chart {
+            gridCols: 6;
+            background: #F0F0FF;
+            lineColor: black;
+            gridColor: black;
+            data: pressure-history;
+        }
+    }
+
+    VerticalBox { //CO2
+        x: 580px;
+        y: 260px;
+        width: parent.width - self.x;
+        height: 220px;
+        padding: 0;
+        spacing: 0;
+        private property <length> title-font-size: 18px;
+        HorizontalLayout {
+            spacing: 0;
+            alignment: start;
+            Text {
+                font-size: title-font-size;
+                text: "CO";
+            }
+            Text {
+                font-size: title-font-size * 70%;
+                vertical-alignment: bottom;
+                text: "2";
+            }
+            Text {
+                font-size: title-font-size;
+                text: ", ppm, 48hrs";
+            }
+        }
+
+        Chart {
+            width: parent.width;
+            gridColor: #00FF00;
+            lineColor: #00FF00;
+            height: 200px;
+            background: #FFFFF0;
+            data: co2-history;
+        }
     }
 
     HorizontalLayout {
         x: 3px;
         y: parent.height - self.height - 3px;
-            height: 20px;
+        height: 20px;
 
         ChargeIndicator {
             charging: charging;
@@ -267,6 +303,7 @@ export component WeatherStation inherits Window {
             width: 50px;
             height: parent.height;
         }
+
         Text {
             text: last-update;
             vertical-alignment: center;
