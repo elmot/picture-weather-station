@@ -104,11 +104,14 @@ void Custom_PmicRegisterInit(void) {
     axp2101.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_500MA);
     axp2101.setChargerTerminationCurr(XPOWERS_AXP2101_CHG_ITERM_25MA);
 
-    /* DC3 is unused on this board — keep it off so it never powers a rail. */
-    if (axp2101.isEnableDC3()) {
-        axp2101.disableDC3();
-        ESP_LOGW("axp2101_init_log", "Disabled DCDC3");
-    }
+    /* ALDO1,2, BLDOs, DC2-4 are unused on this board — keep them off*/
+    axp2101.disableALDO1();
+    axp2101.disableALDO2();
+    axp2101.disableBLDO1();
+    axp2101.disableBLDO2();
+    axp2101.disableDC2();
+    axp2101.disableDC3();
+    axp2101.disableDC4();
 }
 
 /*-----------------------------------------------------------------------
@@ -212,10 +215,9 @@ void power_log_boot_reason(void)
  *---------------------------------------------------------------------*/
 void power_pre_deep_sleep(void)
 {
-    if (axp2101.isEnableDC4()) {
-        axp2101.disableDC4();
-        ESP_LOGI(TAG, "Disabled DCDC4 before deep sleep");
-    }
+    axp2101.disableDC3();
+    axp2101.disableDC4();
+    ESP_LOGI(TAG, "Disabled DCDC3, DCDC4 before deep sleep");
 
     gpio_set_level(POWER_MCU_ACTIVE_PIN, 1);
     gpio_hold_en(POWER_MCU_ACTIVE_PIN);

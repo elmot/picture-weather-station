@@ -26,8 +26,3 @@ void epd_wait_busy_polarity(epd_spi_t *spi, uint32_t caps, uint32_t timeout_ms)
         epd_idle(5);
     }
 }
-__weak void epd_idle(const uint32_t ms)
-{
-    const uint32_t ticks = pdMS_TO_TICKS(ms);
-    vTaskDelay(ticks ==0 ? 1 : ticks);
-}

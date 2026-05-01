@@ -1,11 +1,25 @@
 #include "epd_platform.h"
 #include "esp_log.h"
+#include "esp_sleep.h"
 #include <memory>
 #include <vector>
 
 #include "hw_support.h"
 
 static const char *TAG = "epd_platform";
+
+/*-----------------------------------------------------------------------
+ * Override the e-paper component's __weak idle hook. The default does
+ * vTaskDelay(5ms) inside the busy-pin polling loop. The 6-color panel
+ * stays busy for ~30 s per refresh — light-sleep instead so the SoC
+ * draws ~µA between polls. Wakeup source is the timer; the panel's
+ * BUSY pin transition is detected on the next poll.
+ *---------------------------------------------------------------------*/
+extern "C" void epd_idle(uint32_t /*ms*/)
+{
+    esp_sleep_enable_timer_wakeup(300ULL * 1000ULL);  /* 300 ms */
+    esp_light_sleep_start();
+}
 
 /*-----------------------------------------------------------------------
  * 6-color palette
