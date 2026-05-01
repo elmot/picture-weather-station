@@ -32,6 +32,7 @@ QueueHandle_t g_meteo_queue;
 extern SensorHistory<ruuvi_data_t, 1> g_ruuvi_history;
 extern SensorHistory<adafruit_data_t, 1> g_adafruit_history;
 extern SensorHistory<chart_data_t, 1> g_chart_history;
+extern SensorHistory<chart_data_t, 1> g_pressure_chart_history;
 
 #define WEATHER_HOST "https://api.open-meteo.com"
 #define WEATHER_URL WEATHER_HOST\
@@ -265,25 +266,30 @@ static void adafruit_publish_ruuvi()
  * Publish Ruuvi pressure to a dedicated Adafruit IO feed
  *---------------------------------------------------------------------*/
 #define AIO_PRESSURE_URL "https://io.adafruit.com/api/v2/" CONFIG_PWS_ADAFRUIT_IO_USER \
-    "/feeds/" CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED "/data"
+    "/feeds/" CONFIG_PWS_ADAFRUIT_IO_PRESSURE_FEED_KEY "/data"
 
 
 /*-----------------------------------------------------------------------
  * Fetch chart data from Adafruit IO
  * Response: { "columns":["date","avg"], "data":[["...", "val"], ...] }
+ * Empty buckets come back with a null value — stored as NaN so the
+ * chart renderer leaves a gap instead of drawing through.
  *---------------------------------------------------------------------*/
-#define AIO_CHART_URL "https://io.adafruit.com/api/v2/" CONFIG_PWS_ADAFRUIT_IO_USER \
-    "/feeds/" CONFIG_PWS_ADAFRUIT_IO_CHART_FEED \
-    "/data/chart?hours=48&resolution=30&field=avg"
+#define AIO_CHART_URL_FMT "https://io.adafruit.com/api/v2/" CONFIG_PWS_ADAFRUIT_IO_USER \
+    "/feeds/%s/data/chart?hours=48&resolution=30&field=avg"
 
-
-static void adafruit_io_chart_fetch()
+static void adafruit_io_chart_fetch_feed(const char* feed_key,
+                                         SensorHistory<chart_data_t, 1>& dest)
 {
+    char url[256];
+    snprintf(url, sizeof(url), AIO_CHART_URL_FMT, feed_key);
+
     http_buf_t resp = {.buf = s_http_buf.get(), .len = 0, .cap = s_http_buf.cap()};
-    if (!web_or_adafruit_io_access(AIO_CHART_URL, true, nullptr,
+    if (!web_or_adafruit_io_access(url, true, nullptr,
                                    "AIO chart fetch", &resp, http_event_handler))
         return;
-    ESP_LOGI(AIO_TAG, "AIO chart: received %d bytes", static_cast<int>(resp.len));
+    ESP_LOGI(AIO_TAG, "AIO chart '%s': received %d bytes",
+             feed_key, static_cast<int>(resp.len));
 
     cJSON* root = cJSON_Parse(resp.buf);
     if (!root)
@@ -300,35 +306,72 @@ static void adafruit_io_chart_fetch()
         return;
     }
 
-    /* Each element is [timestamp_str, value_str] — already chronological */
+    /* Each element is [timestamp_str, value] — already chronological */
     chart_data_t chart{};
+    int valid = 0;
     cJSON const* row;
     cJSON_ArrayForEach(row, data_arr)
     {
         if (chart.count >= AIO_CHART_MAX) break;
         if (!cJSON_IsArray(row)) continue;
         cJSON* val = cJSON_GetArrayItem(row, 1);
-        if (!val) continue;
-        if (const char* s = cJSON_GetStringValue(val))
+        float v = NAN;
+        if (val)
         {
-            chart.values[chart.count] = strtof(s, nullptr);
+            if (const char* s = cJSON_GetStringValue(val))
+            {
+                v = strtof(s, nullptr);
+            }
+            else if (cJSON_IsNumber(val))
+            {
+                v = static_cast<float>(cJSON_GetNumberValue(val));
+            }
         }
-        else if (cJSON_IsNumber(val))
-        {
-            chart.values[chart.count] = static_cast<float>(cJSON_GetNumberValue(val));
-        }
-        chart.count++;
+        chart.values[chart.count++] = v;
+        if (std::isfinite(v)) valid++;
     }
 
     cJSON_Delete(root);
 
-    g_chart_history.push(chart);
-    ESP_LOGI(AIO_TAG, "Chart: %d entries", chart.count);
+    dest.push(chart);
+    ESP_LOGI(AIO_TAG, "Chart '%s': %d slots (%d with values)",
+             feed_key, chart.count, valid);
+}
+
+/*-----------------------------------------------------------------------
+ * Fetch current local time from Adafruit IO time integration.
+ * Response is plain text formatted by strftime.
+ *---------------------------------------------------------------------*/
+#define AIO_TIME_URL "https://io.adafruit.com/api/v2/" CONFIG_PWS_ADAFRUIT_IO_USER \
+    "/integrations/time/strftime?tz=Europe/Helsinki&strftime=%25H:%25M%20%25d-%25b-%25Y"
+
+static char s_last_time[64] = {};
+
+static void adafruit_time_fetch()
+{
+    http_buf_t resp = {.buf = s_http_buf.get(), .len = 0, .cap = s_http_buf.cap()};
+    if (!web_or_adafruit_io_access(AIO_TIME_URL, true, nullptr,
+                                   "AIO time fetch", &resp, http_event_handler))
+        return;
+    while (resp.len > 0)
+    {
+        const char c = resp.buf[resp.len - 1];
+        if (c != '\n' && c != '\r' && c != ' ' && c != '\t') break;
+        resp.len--;
+    }
+    resp.buf[resp.len] = '\0';
+    snprintf(s_last_time, sizeof(s_last_time), "%s", resp.buf);
+    ESP_LOGI(AIO_TAG, "AIO time: '%s'", s_last_time);
+}
+
+extern "C" const char* web_get_last_time(void)
+{
+    return s_last_time;
 }
 
 static void adafruit_publish_pressure()
 {
-    if constexpr (sizeof(CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED) <= 1)
+    if constexpr (sizeof(CONFIG_PWS_ADAFRUIT_IO_PRESSURE_FEED_KEY) <= 1)
     {
         ESP_LOGW(AIO_TAG, "Pressure feed key not configured, skipping publish");
         // ReSharper disable once CppDFAUnreachableCode
@@ -348,7 +391,7 @@ static void adafruit_publish_pressure()
                                   nullptr))
     {
         ESP_LOGI(AIO_TAG, "Published pressure %.2f mmHg to feed '%s'",
-                 ruuvi.pressure_mmhg, CONFIG_PWS_ADAFRUIT_IO_PUBLISH_PRESSURE_FEED);
+                 ruuvi.pressure_mmhg, CONFIG_PWS_ADAFRUIT_IO_PRESSURE_FEED_KEY);
     }
 }
 
@@ -436,7 +479,13 @@ extern "C" void wifi_fetch_remote_data(void)
 {
     weather_fetch_and_parse();
     adafruit_fetch();
-    adafruit_io_chart_fetch();
+    adafruit_io_chart_fetch_feed(CONFIG_PWS_ADAFRUIT_IO_CO2_FEED_KEY, g_chart_history);
+    if constexpr (sizeof(CONFIG_PWS_ADAFRUIT_IO_PRESSURE_FEED_KEY) > 1)
+    {
+        adafruit_io_chart_fetch_feed(CONFIG_PWS_ADAFRUIT_IO_PRESSURE_FEED_KEY,
+                                     g_pressure_chart_history);
+    }
+    adafruit_time_fetch();
 }
 
 /*-----------------------------------------------------------------------

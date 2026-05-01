@@ -2,8 +2,8 @@ import "NotoSans-Bold.ttf";
 import { HorizontalBox } from "std-widgets.slint";
 import { DataWidget } from "./data-widget.slint";
 import { WeatherIcon } from "./weather-icon.slint";
-import { Chart, ChartSupport} from "./chart.slint";
-import { ChargeIndicator} from "./charge-indicator.slint";
+import { Chart, ChartSupport } from "./chart.slint";
+import { ChargeIndicator } from "./charge-indicator.slint";
 export { ChartSupport }
 export enum FoxConditionEnum { cloudy, foggy,good, rainy, snowy, sunny, windy, net_fail }
 
@@ -42,6 +42,7 @@ export component WeatherStation inherits Window {
     };
     in property <bool> charging;
     in property <percent> charge;
+    in property <string> last-update;
     private property <physical-length> main-font-size: 18px;
     private property <physical-length> reg-widget-width:73px;
     default-font-weight: 1000;
@@ -240,11 +241,11 @@ export component WeatherStation inherits Window {
         y: 100px;
         width: parent.width - self.x;
         height: 140px;
-		gridCols: 6;
+        gridCols: 6;
         background: #C0E0FF;
         lineColor: black;
         gridColor: black;
-        data: co2-history;
+        data: pressure-history;
     }
 
     Rectangle {
@@ -255,12 +256,22 @@ export component WeatherStation inherits Window {
         background: black;
     }
 
-    ChargeIndicator {
-	 x:3px;
-	 y: parent.height - self.height - 3px;
-     charging: charging;
-     charge: charge;
-	 width: 50px;
-	 height: 20px;
+    HorizontalLayout {
+        x: 3px;
+        y: parent.height - self.height - 3px;
+            height: 20px;
+
+        ChargeIndicator {
+            charging: charging;
+            charge: charge;
+            width: 50px;
+            height: parent.height;
+        }
+        Text {
+            text: last-update;
+            vertical-alignment: center;
+            height: parent.height;
+            font-size: parent.height * 70%;
+        }
     }
 }

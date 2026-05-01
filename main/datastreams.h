@@ -66,6 +66,12 @@ typedef struct
     int count;
 } chart_data_t;
 
+/*-----------------------------------------------------------------------
+ * Last fetched local time (formatted by Adafruit IO strftime endpoint).
+ * Returns a pointer to a static buffer; empty string if not yet fetched.
+ *---------------------------------------------------------------------*/
+const char* web_get_last_time(void);
+
 #ifdef __cplusplus
 }
 #endif

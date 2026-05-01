@@ -38,6 +38,7 @@ constexpr uint64_t SLEEP_DURATION_US       = 30ULL * 60ULL * 1000000ULL;
 SensorHistory<ruuvi_data_t, 1> g_ruuvi_history{};
 SensorHistory<adafruit_data_t, 1> g_adafruit_history{};
 SensorHistory<chart_data_t, 1> g_chart_history{};
+SensorHistory<chart_data_t, 1> g_pressure_chart_history{};
 SensorHistory<shtc3_reading_t, 96> g_shtc3_history{};
 
 void pushRuuviData(const ruuvi_data_t* data)
@@ -128,17 +129,27 @@ static void populate_ui(const slint::ComponentHandle<WeatherStation>& ui, bool w
         });
     }
 
-    /* Adafruit IO chart */
+    /* Adafruit IO CO2 chart */
     {
         auto chart = g_chart_history.last();
         std::vector<float> cv(chart.values, chart.values + chart.count);
         ui->set_co2_history(std::make_shared<slint::VectorModel<float>>(cv));
+    }
+    /* Adafruit IO pressure chart */
+    {
+        auto chart = g_pressure_chart_history.last();
+        std::vector<float> pv(chart.values, chart.values + chart.count);
+        ui->set_pressure_history(std::make_shared<slint::VectorModel<float>>(pv));
     }
     /* Charge indicator */
     {
         ui->set_charge(battery_status.batteryPercent);
         const bool charging = battery_status.charging;
         ui->set_charging(charging);
+    }
+    /* Last update */
+    {
+        ui->set_last_update(web_get_last_time());
     }
 }
 

@@ -81,12 +81,17 @@ slint::Image ChartSupportCodeBase::render_chart(const int w, const int h,
     float range = maxY - minY;
     if (range < 0.0001f) range = 0.0001f;
 
-    /* Draw chart line */
+    /* Draw chart line — break at NaN (missing samples) */
     int prev_x = -1, prev_y = -1;
     for (int i = 0; i < count; i++)
     {
+        const auto value = data.get()->row_data(i).value_or(NAN);
+        if (!std::isfinite(value))
+        {
+            prev_x = -1;
+            continue;
+        }
         const int x = i * (w - 1) / (static_cast<int>(count) - 1);
-        const auto value = data.get()->row_data(i).value_or(0.0f);
         int y = h - 1 - static_cast<int>(
             (value - minY) / range * static_cast<float>(h - 1));
         y = std::clamp(y, 0, h - 1);
@@ -123,12 +128,10 @@ std::shared_ptr<slint::Model<float>> ChartSupportCodeBase::calcBounds(const std:
 
     for (unsigned int i = 0; i < count; i++)
     {
-        if (data->row_data(i).has_value())
-        {
-            const float val = data->row_data(i).value_or(0.0f);
-            if (val < minVal) minVal = val;
-            if (val > maxVal) maxVal = val;
-        }
+        const float val = data->row_data(i).value_or(NAN);
+        if (!std::isfinite(val)) continue;
+        if (val < minVal) minVal = val;
+        if (val > maxVal) maxVal = val;
     }
 
     if (!std::isfinite(minVal)) minVal = 0.0f;
