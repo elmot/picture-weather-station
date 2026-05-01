@@ -61,11 +61,22 @@ bool isDataExpired(const TickType_t last_update)
 /*-----------------------------------------------------------------------
  * Push collected sensor / web data into Slint properties (one shot).
  *---------------------------------------------------------------------*/
-static void populate_ui(const slint::ComponentHandle<WeatherStation>& ui)
+static void populate_ui(const slint::ComponentHandle<WeatherStation>& ui, bool wifi_ok)
 {
+    /* Adafruit IO scalar (read first — its freshness feeds the net_fail decision) */
+    auto aio = g_adafruit_history.last();
+    const bool adafruit_fail = isDataExpired(aio.last_update);
+    ui->set_adafruit_data({
+        .value = aio.value,
+        .connFail = adafruit_fail,
+    });
+
     /* Open-Meteo */
     meteo_data_t meteo{};
-    if (g_meteo_queue && xQueuePeek(g_meteo_queue, &meteo, 0) == pdTRUE)
+    const bool meteo_present = g_meteo_queue && xQueuePeek(g_meteo_queue, &meteo, 0) == pdTRUE;
+    const bool meteo_fail = !meteo_present || isDataExpired(meteo.last_update);
+    const bool net_fail = !wifi_ok || meteo_fail || adafruit_fail;
+    if (meteo_present)
     {
         ui->set_weather_code(static_cast<int>(meteo.code));
         const bool day = meteo.is_day;
@@ -76,15 +87,17 @@ static void populate_ui(const slint::ComponentHandle<WeatherStation>& ui)
             .windSpeed = meteo.wind_speed,
             .windGusts = meteo.wind_gusts,
             .windDir = meteo.wind_dir,
-            .condition = fox_condition(meteo.code, day, meteo.wind_speed, meteo.wind_gusts),
-            .connFail = isDataExpired(meteo.last_update),
+            .condition = net_fail
+                             ? FoxConditionEnum::NetFail
+                             : fox_condition(meteo.code, day, meteo.wind_speed, meteo.wind_gusts),
+            .connFail = meteo_fail,
         });
     }
     else
     {
         ui->set_meteo_data(OpenMeteoData{
             .tempC = 0.0f, .tempFeelsC = 0.0f, .windSpeed = 0.0f, .windGusts = 0.0f,
-            .windDir = slint::SharedString(""), .condition = FoxConditionEnum::Rainy,
+            .windDir = slint::SharedString(""), .condition = FoxConditionEnum::NetFail,
             .connFail = true,
         });
     }
@@ -111,15 +124,6 @@ static void populate_ui(const slint::ComponentHandle<WeatherStation>& ui)
             .relHumidity = ruuvi.humidity,
             .connFail = isDataExpired(ruuvi.last_update),
             .battV = ruuvi.battery_voltage,
-        });
-    }
-
-    /* Adafruit IO scalar */
-    {
-        auto aio = g_adafruit_history.last();
-        ui->set_adafruit_data({
-            .value = aio.value,
-            .connFail = isDataExpired(aio.last_update),
         });
     }
 
@@ -189,7 +193,7 @@ extern "C" void app_main(void)
     /* Build UI, push values, render once — directly, no event loop. */
     auto ui = WeatherStation::create();
     ChartSupportCode<WeatherStation, ChartSupport>(ui).setup();
-    populate_ui(ui);
+    populate_ui(ui, wifi_ok);
     ui->show();
 
     ESP_LOGI(TAG, "Rendering UI");
