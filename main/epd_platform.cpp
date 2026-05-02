@@ -6,18 +6,18 @@
 #include "freertos/FreeRTOS.h"
 
 #include "hw_support.h"
+#include "dithering.h"
 
 static const char *TAG = "epd_platform";
 #define DITHERING 1
 
-constexpr auto m_size = slint::PhysicalSize({LCD_H_RES, LCD_V_RES});
 
-static slint::Rgb8Pixel * render_buffer = nullptr;
+slint::Rgb8Pixel* render_buffer = nullptr;
 
 /*-----------------------------------------------------------------------
  * 6-color palette
  *---------------------------------------------------------------------*/
-static const struct { uint8_t r, g, b, epd; } palette[] = {
+const palette_item_t palette[] = {
     {0,   0,   0,   0x0}, // Black
     {255, 255, 255, 0x1}, // White
     {255, 255, 0,   0x2}, // Yellow
@@ -26,7 +26,7 @@ static const struct { uint8_t r, g, b, epd; } palette[] = {
     {0,   255, 0,   0x6}, // Green
 };
 
-static inline uint8_t rgb888_to_palette_idx(uint8_t r, uint8_t g, uint8_t b)
+uint8_t rgb888_to_palette_idx(uint8_t r, uint8_t g, uint8_t b)
 {
     uint32_t best_dist = UINT32_MAX;
     uint8_t  best = 1;
@@ -41,7 +41,7 @@ static inline uint8_t rgb888_to_palette_idx(uint8_t r, uint8_t g, uint8_t b)
     return best;
 }
 
-static void set_epd_pixel(uint8_t *fb, const int x,const  int y,const  int w,const  uint8_t color)
+void set_epd_pixel(uint8_t *fb, const int x,const  int y,const  int w,const  uint8_t color)
 {
     const uint32_t idx = static_cast<uint32_t>(y) * w + x;
     const uint32_t addr = idx / 2;
@@ -105,7 +105,7 @@ void epd_platform_init()
         return;
     }
 }
-static void apply_floyd_steinberg_dithering();
+void apply_floyd_steinberg_dithering(uint8_t* target_fb);
 
 void epd_platform_render()
 {
@@ -129,7 +129,10 @@ void epd_platform_render()
     // ReSharper disable once CppExpressionWithoutSideEffects
     m_renderer.render(rgb8_pixels,m_size.width);
 #ifdef DITHERING
-    apply_floyd_steinberg_dithering();
+    ESP_LOGI(TAG, "Applying Floyd-Steinberg dithering...");
+    apply_floyd_steinberg_dithering(epd_get_framebuffer(s_epd));
+    ESP_LOGI(TAG, "Dithering complete");
+
 #else
     for (int y = 0; y < m_size.height; ++y)
     {
@@ -147,80 +150,8 @@ void epd_platform_render()
 }
 
 
-static inline int clamp_byte(const int v) {
-    return v < 0 ? 0 : (v > 255 ? 255 : v);
-}
 
-static void apply_floyd_steinberg_dithering()
+void dithering_periodic_call()
 {
-    uint8_t* _fb = epd_get_framebuffer(s_epd);
-    ESP_LOGI(TAG, "Applying Floyd-Steinberg dithering...");
-
-    for (int y = 0; y < m_size.height; y++) {
-        // Yield every 20 rows to prevent watchdog
-        if (y % 20 == 0) {
-            vTaskDelay(1);
-        }
-
-        for (int x = 0; x < m_size.width; x++) {
-            int idx = (y * m_size.width + x);
-
-            // Get current pixel RGB
-            int r = render_buffer[idx].r;
-            int g = render_buffer[idx].g;
-            int b = render_buffer[idx].b;
-
-            // Find nearest palette color
-            uint8_t pal_idx = rgb888_to_palette_idx(r, g, b);
-            uint8_t epaper_color;
-            int pal_r, pal_g, pal_b;
-
-
-                epaper_color = palette[pal_idx].epd;
-                pal_r = palette[pal_idx].r;
-                pal_g = palette[pal_idx].g;
-                pal_b = palette[pal_idx].b;
-
-            // Set pixel in framebuffer
-            set_epd_pixel(_fb, m_size.width - x, m_size.height - y, m_size.width, epaper_color);
-
-            // Calculate quantization error
-            int err_r = r - pal_r;
-            int err_g = g - pal_g;
-            int err_b = b - pal_b;
-
-            // Distribute error to neighbors (Floyd-Steinberg)
-            // Right pixel: 7/16
-            if (x + 1 < m_size.width) {
-                int ni = idx + 1;
-                render_buffer[ni].r = clamp_byte(render_buffer[ni].r + err_r * 7 / 16);
-                render_buffer[ni].g = clamp_byte(render_buffer[ni].g + err_g * 7 / 16);
-                render_buffer[ni].b = clamp_byte(render_buffer[ni].b + err_b * 7 / 16);
-            }
-            // Bottom-left pixel: 3/16
-            if (y + 1 < m_size.height && x > 0) {
-                int ni = (y + 1) * m_size.width + x - 1;
-                render_buffer[ni].r = clamp_byte(render_buffer[ni].r + err_r * 3 / 16);
-                render_buffer[ni].g = clamp_byte(render_buffer[ni].g + err_g * 3 / 16);
-                render_buffer[ni].b = clamp_byte(render_buffer[ni].b + err_b * 3 / 16);
-            }
-            // Bottom pixel: 5/16
-            if (y + 1 < m_size.height) {
-                int ni = (y + 1) * m_size.width + x;
-                render_buffer[ni].r = clamp_byte(render_buffer[ni].r + err_r * 5 / 16);
-                render_buffer[ni].g = clamp_byte(render_buffer[ni].g + err_g * 5 / 16);
-                render_buffer[ni].b = clamp_byte(render_buffer[ni].b + err_b * 5 / 16);
-            }
-            // Bottom-right pixel: 1/16
-            if (y + 1 < m_size.height && x + 1 < m_size.width) {
-                int ni = (y + 1) * m_size.width + x + 1;
-                render_buffer[ni].r = clamp_byte(render_buffer[ni].r + err_r / 16);
-                render_buffer[ni].g = clamp_byte(render_buffer[ni].g + err_g / 16);
-                render_buffer[ni].b = clamp_byte(render_buffer[ni].b + err_b / 16);
-            }
-        }
-    }
-
-    ESP_LOGI(TAG, "Dithering complete");
+    vTaskDelay(1);
 }
-

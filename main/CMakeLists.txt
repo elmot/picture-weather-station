@@ -12,6 +12,7 @@
                     chart.cpp
                     wifi_helper.c
                     rtc_state.cpp
+                    dithering.cpp
                  INCLUDE_DIRS "."
                  REQUIRES esp_lcd driver esp_driver_i2c esp_wifi esp_event nvs_flash bt esp_timer esp_http_client esp-tls esp_epaper
          )
