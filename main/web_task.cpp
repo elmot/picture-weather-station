@@ -34,9 +34,7 @@ extern SensorHistory<adafruit_data_t, 1> g_adafruit_history;
 extern SensorHistory<chart_data_t, 1> g_chart_history;
 extern SensorHistory<chart_data_t, 1> g_pressure_chart_history;
 
-#define WEATHER_HOST "https://api.open-meteo.com"
-#define WEATHER_URL WEATHER_HOST\
-"/v1/forecast?latitude=" CONFIG_PWS_LAT \
+#define WEATHER_URL "https://api.open-meteo.com/v1/forecast?latitude=" CONFIG_PWS_LAT \
 "&longitude=" CONFIG_PWS_LON \
 "&models=metno_seamless&current=temperature_2m,relative_humidity_2m,apparent_temperature,snowfall,showers,rain,is_day,precipitation,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_gusts_10m,wind_direction_10m,wind_speed_10m&wind_speed_unit=ms"
 

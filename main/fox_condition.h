@@ -47,9 +47,9 @@ inline FoxConditionEnum fox_condition(const int wmo_weather_code_t,
     {
     case WMO_CLEAR_SKY:
     case WMO_MAINLY_CLEAR:
+    case WMO_PARTLY_CLOUDY:
         if (is_windy) return FoxConditionEnum::Windy;
         return is_day ? FoxConditionEnum::Sunny : FoxConditionEnum::Good;
-    case WMO_PARTLY_CLOUDY:
     case WMO_OVERCAST:
     case WMO_DRIZZLE_LIGHT:
         return is_windy ? FoxConditionEnum::Windy : FoxConditionEnum::Cloudy;
