@@ -37,6 +37,8 @@ constexpr uint64_t SLEEP_DURATION_US       = 30ULL * 60ULL * 1000000ULL;
  *---------------------------------------------------------------------*/
 SensorHistory<ruuvi_data_t, 1> g_ruuvi_history{};
 SensorHistory<adafruit_data_t, 1> g_adafruit_history{};
+SensorHistory<adafruit_data_t, 1> g_adafruit_humidity_history{};
+SensorHistory<adafruit_data_t, 1> g_adafruit_temperature_history{};
 SensorHistory<chart_data_t, 1> g_chart_history{};
 SensorHistory<chart_data_t, 1> g_pressure_chart_history{};
 SensorHistory<shtc3_reading_t, 96> g_shtc3_history{};
@@ -67,9 +69,13 @@ static void populate_ui(const slint::ComponentHandle<WeatherStation>& ui, bool w
 {
     /* Adafruit IO scalar (read first — its freshness feeds the net_fail decision) */
     auto aio = g_adafruit_history.last();
+    auto aio_humidity = g_adafruit_humidity_history.last();
+    auto aio_temperature = g_adafruit_temperature_history.last();
     const bool adafruit_fail = isDataExpired(aio.last_update);
     ui->set_adafruit_data({
         .value = aio.value,
+        .humidity = aio_humidity.value,
+        .temperature = aio_temperature.value,
         .connFail = adafruit_fail,
     });
 

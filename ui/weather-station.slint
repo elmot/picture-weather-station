@@ -20,7 +20,7 @@ export struct OpenMeteoData {
     connFail: bool
 }
 
-export struct AdaIoData { value: float, connFail: bool}
+export struct AdaIoData { value: float, humidity: float, temperature: float, connFail: bool}
 
 export struct LocalData { tempC: float, relHumidity: float, tempHistory: [float]}
 
@@ -28,7 +28,7 @@ export component WeatherStation inherits Window {
     in property <int> weather-code: 0;
     in property <bool> day: true;
     in property <LocalData> indoor-data: { relHumidity:0.0001, tempC:-10.00001 };
-    in property <AdaIoData> adafruit-data: { value: 333.33455453, connFail: true };
+    in property <AdaIoData> adafruit-data: { value: 333.33455453, humidity: 50.0, temperature: 22.0, connFail: true };
     in property <RuuviData> roovi-data: { relHumidity: 0.0001, tempC: 0.0001, atmPHgmm: 0.0001, battV: 2.7, connFail: true };
     in property <[float]> co2-history;
     in property <[float]> pressure-history;
@@ -61,29 +61,51 @@ export component WeatherStation inherits Window {
         name: "AdaIO";
         valid: !adafruit-data.connFail;
         x: 30px;
-        y: 357px;
+        y: 350px;
         width: 185px;
-        HorizontalLayout {
-            x: 4px;
-            width: 170px;
-            alignment: start;
-            Text {
-                text: "CO";
-                color: black;
-                font-size: main-font-size;
+        VerticalLayout {
+            spacing: 2px;
+            HorizontalLayout {
+                alignment: start;
+                Text {
+                    text: "CO";
+                    color: black;
+                    font-size: main-font-size;
+                }
+
+                Text {
+                    y: 10px;
+                    color: black;
+                    font-size: main-font-size - 2px;
+                    text: "2";
+                }
+
+                Text {
+                    text: ": \{ adafruit-data.value.to-fixed(0)} ppm";
+                    color: black;
+                    font-size: main-font-size;
+                }
             }
 
-            Text {
-                y: 10px;
-                color: black;
-                font-size: main-font-size - 2px;
-                text: "2";
-            }
+            HorizontalLayout {
+                alignment: start;
+                Text {
+                    text: "T: \{adafruit-data.temperature.to-fixed(1)}";
+                    color: black;
+                    font-size: main-font-size;
+                }
 
-            Text {
-                text: ": \{ adafruit-data.value.to-fixed(0)} ppm";
-                color: black;
-                font-size: main-font-size;
+                Text {
+                    color: black;
+                    font-size: 8px;
+                    text: "O";
+                }
+
+                Text {
+                    text: "C  H: \{adafruit-data.humidity.to-fixed(0)}%";
+                    color: black;
+                    font-size: main-font-size;
+                }
             }
         }
     }

@@ -48,7 +48,19 @@ menu "Picture Weather Station"
         string "Adafruit IO CO2 feed key"
         default ""
         help
-            Key of the Adafruit IO feed to read (e.g. "outdoor-temp").
+            Key of the Adafruit IO feed to read.
+
+    config PWS_ADAFRUIT_IO_HUMIDITY_FEED_KEY
+        string "Adafruit IO humidity feed key"
+        default ""
+        help
+            Key of the Adafruit IO feed to read.
+
+    config PWS_ADAFRUIT_IO_TEMPERATURE_FEED_KEY
+        string "Adafruit IO temperature feed key"
+        default ""
+        help
+            Key of the Adafruit IO feed to read.
 
     config PWS_ADAFRUIT_IO_PUBLISH_JSON_FEED
         string "Adafruit IO publish feed key (Ruuvi)"

@@ -31,6 +31,8 @@ constexpr const char* AIO_TAG = "AdafruitIO";
 QueueHandle_t g_meteo_queue;
 extern SensorHistory<ruuvi_data_t, 1> g_ruuvi_history;
 extern SensorHistory<adafruit_data_t, 1> g_adafruit_history;
+extern SensorHistory<adafruit_data_t, 1> g_adafruit_humidity_history;
+extern SensorHistory<adafruit_data_t, 1> g_adafruit_temperature_history;
 extern SensorHistory<chart_data_t, 1> g_chart_history;
 extern SensorHistory<chart_data_t, 1> g_pressure_chart_history;
 
@@ -215,13 +217,17 @@ static void weather_fetch_and_parse()
 /*-----------------------------------------------------------------------
  * Fetch latest value from Adafruit IO feed
  *---------------------------------------------------------------------*/
-#define AIO_URL "https://io.adafruit.com/api/v2/" CONFIG_PWS_ADAFRUIT_IO_USER \
-    "/feeds/" CONFIG_PWS_ADAFRUIT_IO_CO2_FEED_KEY "/data/last"
+#define AIO_LAST_URL_FMT "https://io.adafruit.com/api/v2/" CONFIG_PWS_ADAFRUIT_IO_USER \
+    "/feeds/%s/data/last"
 
-static void adafruit_fetch()
+static void adafruit_fetch_feed(const char* feed_key,
+                                SensorHistory<adafruit_data_t, 1>& dest)
 {
+    char url[256];
+    snprintf(url, sizeof(url), AIO_LAST_URL_FMT, feed_key);
+
     http_buf_t resp = {.buf = s_http_buf.get(), .len = 0, .cap = s_http_buf.cap()};
-    if (!web_or_adafruit_io_access(AIO_URL, true, nullptr, "Adafruit fetch",
+    if (!web_or_adafruit_io_access(url, true, nullptr, "Adafruit fetch",
                                    &resp, http_event_handler))
         return;
     cJSON* root = cJSON_Parse(resp.buf);
@@ -234,8 +240,8 @@ static void adafruit_fetch()
     if (const char* value_str = cJSON_GetStringValue(cJSON_GetObjectItem(root, "value")))
     {
         float val = strtof(value_str, nullptr);
-        g_adafruit_history.push({val, xTaskGetTickCount()});
-        ESP_LOGI(AIO_TAG, "Adafruit IO: %s = %.2f", CONFIG_PWS_ADAFRUIT_IO_CO2_FEED_KEY, val);
+        dest.push({val, xTaskGetTickCount()});
+        ESP_LOGI(AIO_TAG, "Adafruit IO: %s = %.2f", feed_key, val);
     }
 
     cJSON_Delete(root);
@@ -476,7 +482,17 @@ extern "C" bool wifi_wait_connected(uint32_t timeout_ms)
 extern "C" void wifi_fetch_remote_data(void)
 {
     weather_fetch_and_parse();
-    adafruit_fetch();
+    adafruit_fetch_feed(CONFIG_PWS_ADAFRUIT_IO_CO2_FEED_KEY, g_adafruit_history);
+    if constexpr (sizeof(CONFIG_PWS_ADAFRUIT_IO_HUMIDITY_FEED_KEY) > 1)
+    {
+        adafruit_fetch_feed(CONFIG_PWS_ADAFRUIT_IO_HUMIDITY_FEED_KEY,
+                            g_adafruit_humidity_history);
+    }
+    if constexpr (sizeof(CONFIG_PWS_ADAFRUIT_IO_TEMPERATURE_FEED_KEY) > 1)
+    {
+        adafruit_fetch_feed(CONFIG_PWS_ADAFRUIT_IO_TEMPERATURE_FEED_KEY,
+                            g_adafruit_temperature_history);
+    }
     adafruit_io_chart_fetch_feed(CONFIG_PWS_ADAFRUIT_IO_CO2_FEED_KEY, g_chart_history);
     if constexpr (sizeof(CONFIG_PWS_ADAFRUIT_IO_PRESSURE_FEED_KEY) > 1)
     {
