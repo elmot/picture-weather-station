@@ -126,7 +126,7 @@ static void populate_ui(const slint::ComponentHandle<WeatherStation>& ui, bool w
     /* Ruuvi tag */
     {
         auto ruuvi = g_ruuvi_history.last();
-        ui->set_roovi_data(RuuviData{
+        ui->set_ruuvi_data(RuuviData{
             .tempC = ruuvi.temperature,
             .atmPHgmm = ruuvi.pressure_mmhg,
             .relHumidity = ruuvi.humidity,

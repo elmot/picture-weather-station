@@ -1,4 +1,4 @@
-import "NotoSans-Bold.ttf";
+import "font/NotoSans-Bold.ttf";
 import { HorizontalBox, VerticalBox } from "std-widgets.slint";
 import { DataWidget } from "./data-widget.slint";
 import { WeatherIcon } from "./weather-icon.slint";
@@ -8,7 +8,6 @@ export { ChartSupport }
 export enum FoxConditionEnum { cloudy, foggy,good, rainy, snowy, sunny, windy, net_fail }
 
 export struct RuuviData { tempC: float, atmPHgmm: float, relHumidity: float, connFail: bool, battV: float}
-
 
 export struct OpenMeteoData {
     tempC: float,
@@ -25,11 +24,15 @@ export struct AdaIoData { value: float, humidity: float, temperature: float, con
 export struct LocalData { tempC: float, relHumidity: float, tempHistory: [float]}
 
 export component WeatherStation inherits Window {
+	default-font-family: "Noto Sans";
+	default-font-weight: 1000;
     in property <int> weather-code: 0;
+
     in property <bool> day: true;
+
     in property <LocalData> indoor-data: { relHumidity:0.0001, tempC:-10.00001 };
     in property <AdaIoData> adafruit-data: { value: 333.33455453, humidity: 50.0, temperature: 22.0, connFail: true };
-    in property <RuuviData> roovi-data: { relHumidity: 0.0001, tempC: 0.0001, atmPHgmm: 0.0001, battV: 2.7, connFail: true };
+    in property <RuuviData> ruuvi-data: { relHumidity: 0.0001, tempC: 0.0001, atmPHgmm: 0.0001, battV: 2.7, connFail: true };
     in property <[float]> co2-history;
     in property <[float]> pressure-history;
     in property <OpenMeteoData> meteo-data: {
@@ -45,7 +48,7 @@ export component WeatherStation inherits Window {
     in property <string> last-update;
     private property <physical-length> main-font-size: 18px;
     private property <physical-length> reg-widget-width:73px;
-    default-font-weight: 1000;
+    private property <float> hourly-p-change: 2 * (pressure-history[(pressure-history.length - 1)] - pressure-history[(pressure-history.length - 2)]);
 
     width: 800px;
     height: 480px;
@@ -58,34 +61,13 @@ export component WeatherStation inherits Window {
     }
 
     DataWidget {
-        name: "AdaIO";
+        name: "Bedroom";
         valid: !adafruit-data.connFail;
         x: 30px;
         y: 350px;
         width: 185px;
         VerticalLayout {
             spacing: 2px;
-            HorizontalLayout {
-                alignment: start;
-                Text {
-                    text: "CO";
-                    color: black;
-                    font-size: main-font-size;
-                }
-
-                Text {
-                    y: 10px;
-                    color: black;
-                    font-size: main-font-size - 2px;
-                    text: "2";
-                }
-
-                Text {
-                    text: ": \{ adafruit-data.value.to-fixed(0)} ppm";
-                    color: black;
-                    font-size: main-font-size;
-                }
-            }
 
             HorizontalLayout {
                 alignment: start;
@@ -114,7 +96,7 @@ export component WeatherStation inherits Window {
         name: "Ruuvi";
         x: 320px;
         y: 20px;
-        valid: !roovi-data.connFail;
+        valid: !ruuvi-data.connFail;
         GridLayout {
             width: 200px;
             spacing-horizontal: 8px;
@@ -124,7 +106,7 @@ export component WeatherStation inherits Window {
                     Text {
                         color: black;
                         font-size: main-font-size;
-                        text: "T: \{roovi-data.tempC.to-fixed(1)}";
+                        text: "T: \{ruuvi-data.tempC.to-fixed(1)}";
                     }
 
                     Text {
@@ -143,21 +125,16 @@ export component WeatherStation inherits Window {
                 Text {
                     color: black;
                     font-size: main-font-size;
-                    text: "H: \{roovi-data.relHumidity.to-fixed(0)}%";
+                    text: "H: \{ruuvi-data.relHumidity.to-fixed(0)}%";
                 }
             }
 
             Row {
-                Text {
-                    color: black;
-                    font-size: main-font-size;
-                    text: "P: \{roovi-data.atmPHgmm.to-fixed(0)} mmHg";
-                }
 
                 Text {
-                    color: roovi-data.battV > 2.7 ? black : roovi-data.battV > 2.5 ? yellow : darkred;
+                    color: ruuvi-data.battV > 2.7 ? black : ruuvi-data.battV > 2.5 ? yellow : darkred;
                     font-size: main-font-size;
-                    text: "Bat: \{roovi-data.battV.to-fixed(1)}V";
+                    text: "Bat: \{ruuvi-data.battV.to-fixed(1)}V";
                 }
             }
         }
@@ -236,15 +213,7 @@ export component WeatherStation inherits Window {
     Image {
         x: 0;
         y: 0;
-        source: meteo-data.condition == FoxConditionEnum.net-fail
-        ? @image-url("../pict/pencifox/ready/net_fail.png")
-        : meteo-data.condition == FoxConditionEnum.cloudy ? @image-url("../pict/pencifox/ready/cloudy.png")
-        : meteo-data.condition == FoxConditionEnum.foggy ? @image-url("../pict/pencifox/ready/foggy.png")
-        : meteo-data.condition == FoxConditionEnum.good ? @image-url("../pict/pencifox/ready/good.png")
-        : meteo-data.condition == FoxConditionEnum.rainy ? @image-url("../pict/pencifox/ready/rainy.png")
-        : meteo-data.condition == FoxConditionEnum.snowy ? @image-url("../pict/pencifox/ready/snowy.png")
-        : meteo-data.condition == FoxConditionEnum.sunny ? @image-url("../pict/pencifox/ready/sunny.png")
-        : @image-url("../pict/pencifox/ready/windy.png");
+        source: meteo-data.condition == FoxConditionEnum.net-fail ? @image-url("../pict/pencifox/ready/net_fail.png") : meteo-data.condition == FoxConditionEnum.cloudy ? @image-url("../pict/pencifox/ready/cloudy.png") : meteo-data.condition == FoxConditionEnum.foggy ? @image-url("../pict/pencifox/ready/foggy.png") : meteo-data.condition == FoxConditionEnum.good ? @image-url("../pict/pencifox/ready/good.png") : meteo-data.condition == FoxConditionEnum.rainy ? @image-url("../pict/pencifox/ready/rainy.png") : meteo-data.condition == FoxConditionEnum.snowy ? @image-url("../pict/pencifox/ready/snowy.png") : meteo-data.condition == FoxConditionEnum.sunny ? @image-url("../pict/pencifox/ready/sunny.png") : @image-url("../pict/pencifox/ready/windy.png");
     }
 
     Rectangle { // Splitter
@@ -269,12 +238,40 @@ export component WeatherStation inherits Window {
             width: parent.width - self.x;
         }
 
-        Chart {
-            gridCols: 6;
-            background: #F0F0FF;
-            lineColor: black;
-            gridColor: black;
-            data: pressure-history;
+        Rectangle {
+            width: 100%;
+            Text {
+                y: 0;
+                height: parent.height;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                text: "\{ruuvi-data.atmPHgmm.to-fixed(0)}";
+                font-size: 60px;
+                opacity: 0.6;
+                color: blue;
+            }
+
+            Image {
+                source:
+                hourly-p-change < -2 ? @image-url("../pict/pressure_icon_q_down.png")
+                : hourly-p-change < -1 ? @image-url("../pict/pressure_icon_down.png")
+                : hourly-p-change > 2 ? @image-url("../pict/pressure_icon_q_up.png")
+                : @image-url("../pict/pressure_icon_up.png");
+                visible: (-1 > hourly-p-change) || (1 < hourly-p-change) ;
+                horizontal-alignment: right;
+                x: 0;
+                opacity: 80%;
+            }
+            Chart {
+                y: 0;
+                width: 100%;
+                height: 100%;
+                gridCols: 6;
+                lineColor: black;
+                gridColor: black;
+                data: pressure-history;
+            }
+
         }
     }
 
@@ -292,25 +289,40 @@ export component WeatherStation inherits Window {
             Text {
                 font-size: title-font-size;
                 text: "CO";
+                color: black;
             }
+
             Text {
                 font-size: title-font-size * 70%;
                 vertical-alignment: bottom;
                 text: "2";
             }
+
             Text {
                 font-size: title-font-size;
                 text: ", ppm, 48hrs";
             }
         }
 
-        Chart {
-            width: parent.width;
-            gridColor: #00FF00;
-            lineColor: #00FF00;
+        Rectangle {
             height: 200px;
-            background: #FFFFF0;
-            data: co2-history;
+            width: parent.width;
+            Text {
+                y: 0;
+                height: parent.height;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                text: "\{adafruit-data.value.to-fixed(0)}";
+                font-size: 60px;
+                opacity: 0.6;
+                color: adafruit-data.value > 1500 ? red
+                : adafruit-data.value > 1200 ? brown : #00A000;
+            }
+            Chart {
+                gridColor: #00FF00;
+                lineColor: #00FF00;
+                data: co2-history;
+            }
         }
     }
 
