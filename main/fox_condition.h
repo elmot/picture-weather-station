@@ -51,15 +51,16 @@ inline FoxConditionEnum fox_condition(const int wmo_weather_code_t,
         if (is_windy) return FoxConditionEnum::Windy;
         return is_day ? FoxConditionEnum::Sunny : FoxConditionEnum::Good;
     case WMO_OVERCAST:
-    case WMO_DRIZZLE_LIGHT:
         return is_windy ? FoxConditionEnum::Windy : FoxConditionEnum::Cloudy;
-    case WMO_FOG:
-    case WMO_RIME_FOG:
-        return FoxConditionEnum::Foggy;
+    case WMO_DRIZZLE_LIGHT:
     case WMO_DRIZZLE_MODERATE:
     case WMO_DRIZZLE_DENSE:
     case WMO_FREEZING_DRIZZLE_LIGHT:
     case WMO_FREEZING_DRIZZLE_DENSE:
+        return is_windy ? FoxConditionEnum::Windy : FoxConditionEnum::Drizzly;
+    case WMO_FOG:
+    case WMO_RIME_FOG:
+        return FoxConditionEnum::Foggy;
     case WMO_RAIN_SLIGHT:
     case WMO_RAIN_MODERATE:
     case WMO_RAIN_HEAVY:
@@ -69,7 +70,7 @@ inline FoxConditionEnum fox_condition(const int wmo_weather_code_t,
     case WMO_RAIN_SHOWERS_MODERATE:
     case WMO_RAIN_SHOWERS_VIOLENT:
     case WMO_THUNDERSTORM:
-        return FoxConditionEnum::Rainy;
+        return is_windy ? FoxConditionEnum::WindyRainy : FoxConditionEnum::Rainy;
     case WMO_SNOW_SLIGHT:
     case WMO_SNOW_MODERATE:
     case WMO_SNOW_HEAVY:

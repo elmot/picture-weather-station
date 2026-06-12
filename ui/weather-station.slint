@@ -5,7 +5,7 @@ import { WeatherIcon } from "./weather-icon.slint";
 import { Chart, ChartSupport } from "./chart.slint";
 import { ChargeIndicator } from "./charge-indicator.slint";
 export { ChartSupport }
-export enum FoxConditionEnum { cloudy, foggy,good, rainy, snowy, sunny, windy, net_fail }
+export enum FoxConditionEnum { cloudy, foggy, good, drizzly, rainy, snowy, sunny, windy, windy_rainy, net_fail }
 
 export struct RuuviData { tempC: float, atmPHgmm: float, relHumidity: float, connFail: bool, battV: float}
 
@@ -47,8 +47,9 @@ export component WeatherStation inherits Window {
     in property <percent> charge;
     in property <string> last-update;
     private property <physical-length> main-font-size: 18px;
+    pressure-history: [0, 1];
     private property <physical-length> reg-widget-width:73px;
-    private property <float> hourly-p-change: 2 * (pressure-history[(pressure-history.length - 1)] - pressure-history[(pressure-history.length - 2)]);
+    private property <float> hourly-p-change: 2.0 * (pressure-history[(pressure-history.length - 1)] - pressure-history[(pressure-history.length - 2)]);
 
     width: 800px;
     height: 480px;
@@ -213,7 +214,16 @@ export component WeatherStation inherits Window {
     Image {
         x: 0;
         y: 0;
-        source: meteo-data.condition == FoxConditionEnum.net-fail ? @image-url("../pict/pencifox/ready/net_fail.png") : meteo-data.condition == FoxConditionEnum.cloudy ? @image-url("../pict/pencifox/ready/cloudy.png") : meteo-data.condition == FoxConditionEnum.foggy ? @image-url("../pict/pencifox/ready/foggy.png") : meteo-data.condition == FoxConditionEnum.good ? @image-url("../pict/pencifox/ready/good.png") : meteo-data.condition == FoxConditionEnum.rainy ? @image-url("../pict/pencifox/ready/rainy.png") : meteo-data.condition == FoxConditionEnum.snowy ? @image-url("../pict/pencifox/ready/snowy.png") : meteo-data.condition == FoxConditionEnum.sunny ? @image-url("../pict/pencifox/ready/sunny.png") : @image-url("../pict/pencifox/ready/windy.png");
+        source: meteo-data.condition == FoxConditionEnum.net-fail ? @image-url("../pict/pencifox/ready/net_fail.png")
+        : meteo-data.condition == FoxConditionEnum.cloudy ? @image-url("../pict/pencifox/ready/cloudy.png")
+        : meteo-data.condition == FoxConditionEnum.foggy ? @image-url("../pict/pencifox/ready/foggy.png")
+        : meteo-data.condition == FoxConditionEnum.good ? @image-url("../pict/pencifox/ready/good.png")
+        : meteo-data.condition == FoxConditionEnum.rainy ? @image-url("../pict/pencifox/ready/rainy.png")
+        : meteo-data.condition == FoxConditionEnum.windy_rainy ? @image-url("../pict/pencifox/ready/windy-rainy.png")
+        : meteo-data.condition == FoxConditionEnum.drizzly ? @image-url("../pict/pencifox/ready/drizzly.png")
+        : meteo-data.condition == FoxConditionEnum.snowy ? @image-url("../pict/pencifox/ready/snowy.png")
+        : meteo-data.condition == FoxConditionEnum.sunny ? @image-url("../pict/pencifox/ready/sunny.png")
+        : @image-url("../pict/pencifox/ready/windy.png");
     }
 
     Rectangle { // Splitter
