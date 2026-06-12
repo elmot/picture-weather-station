@@ -22,13 +22,13 @@ menu "Picture Weather Station"
 
     config PWS_LAT
         string "Latitude"
-        default "60.25"
+        default "60.45"
         help
             Latitude coordinate for weather station location (decimal degrees, e.g. "60.1699").
 
     config PWS_LON
         string "Longitude"
-        default "20.27"
+        default "22.26"
         help
             Longitude coordinate for weather station location (decimal degrees, e.g. "24.9384").
 
