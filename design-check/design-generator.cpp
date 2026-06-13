@@ -193,7 +193,7 @@ std::shared_ptr<slint::Model<float>> calc_bounds(const std::shared_ptr<slint::Mo
 // ---------------------------------------------------------------------------
 
 void populate_fake_data(const slint::ComponentHandle<WeatherStation> &ui) {
-    ui->set_weather_code(3);
+    ui->set_weather_code(99);
     ui->set_day(true);
 
     ui->set_indoor_data(LocalData{.tempC = 21.4f, .relHumidity = 47.0f, .tempHistory = {}});

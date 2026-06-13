@@ -1,0 +1,1 @@
+Icons taken from https://github.com/metno/weathericons
