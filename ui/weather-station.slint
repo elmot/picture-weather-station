@@ -1,4 +1,3 @@
-import "font/NotoSans-Bold.ttf";
 import { HorizontalBox, VerticalBox, AboutSlint } from "std-widgets.slint";
 import { DataWidget } from "./data-widget.slint";
 import { WeatherIcon } from "./weather-icon.slint";
@@ -24,8 +23,9 @@ export struct AdaIoData { value: float, humidity: float, temperature: float, con
 export struct LocalData { tempC: float, relHumidity: float, tempHistory: [float]}
 
 export component WeatherStation inherits Window {
-	default-font-family: "Noto Sans";
-	default-font-weight: 1000;
+//	default-font-weight: 800;
+	default-font-family: "Verdana";
+	default-font-size: 40px;
     in property <int> weather-code: 0;
 
     in property <bool> day: true;
@@ -46,7 +46,7 @@ export component WeatherStation inherits Window {
     in property <bool> charging;
     in property <percent> charge;
     in property <string> last-update;
-    private property <physical-length> main-font-size: 36px;
+    private property <physical-length> main-font-size: 40px;
     pressure-history: [0, 1];
     private property <physical-length> reg-widget-width:73px;
     private property <float> hourly-p-change: 2.0 * (pressure-history[(pressure-history.length - 1)] - pressure-history[(pressure-history.length - 2)]);
@@ -65,7 +65,8 @@ export component WeatherStation inherits Window {
 			Text {
 				text: "Temp";
 				color: black;
-				font-size: main-font-size * 2 / 3;
+				font-italic: false;
+			    font-size: main-font-size * 2 / 3;
 			}
 
 			HorizontalLayout {
@@ -197,6 +198,7 @@ export component WeatherStation inherits Window {
 
 
 // House
+/*
     Path {
      x: 450px;
      y:1px;
@@ -217,7 +219,13 @@ export component WeatherStation inherits Window {
      MoveTo {x:0;y:52;}
      LineTo {x:100;y:52;}
     }
-
+*/
+	Image {
+	  source: @image-url("../pict/house_bg.png");
+	  z:-1;
+	  y:1px;
+	  x: parent.width -self.width;
+	}
 // 2nd story
 	VerticalLayout {
 		x:460px;

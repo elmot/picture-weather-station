@@ -26,11 +26,7 @@ Ruuvi pressure is also published back to Adafruit IO every 5 minutes.
 
 ## Hardware
 
-- **[DFRobot Unihiker K10](https://www.dfrobot.com/)** 
-  - ESP32-S3, 16 MB flash, 8 MB octal PSRAM
-  - 320x240 TFT LCD
-  - **SHTC3** temperature/humidity sensor
-- _TBD_ migrate to **[ESP32-S3-PhotoPainter 7.3"](https://www.waveshare.com/esp32-s3-photopainter.htm)**
+- **[ESP32-S3-PhotoPainter 7.3"](https://www.waveshare.com/esp32-s3-photopainter.htm)**
 - **[Ruuvi Tag](https://ruuvi.com/)**
 
 ## UI
