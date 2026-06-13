@@ -1,14 +1,14 @@
 export component DataWidget inherits Rectangle {
     in property <string> name;
-    in property <color> borderColor: #0000FF;
+    in property <color> borderColor: #000000;
     in property <bool> valid: true;
     width: inner.width;
     height: inner.height;
     inner := Rectangle {
         border-color: borderColor;
-        border-width: 3px;
+        border-width: 1px;
         border-radius: 12px;
-        background: #FFFFD0;
+        background: #FFF;
         width: max(layout.preferred-width + 5px, label.preferred-width + 15px);
         height: layout.preferred-height + 5px;
         label := Rectangle {
